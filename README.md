@@ -78,6 +78,8 @@ Note that the output of the script is already included in the repository. You ca
 
 After cleaning and duplicate removal, there are **48,468,231 tokens**. The word list consists of **126,509 words** (123,407 normalized words) occurring in at least 3 videos.
 
+We have not attempted to analyze the corpus/frequencies, or compare them with word lists based on smaller but more carefully curated corpora of spoken Japanese, such as [CSJ](https://clrd.ninjal.ac.jp/csj/index.html) (7M tokens). Note that there is also [LaboroTVSpeech](https://laboro.ai/activity/column/engineer/eg-laboro-tv-corpus-jp/) (22M tokens) based on TV subtitles.
+
 ## Cleaning statistics (steps 2-4 above):
 
 * files (determined after sequence removal and line filtering):
