@@ -5,9 +5,9 @@ Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Jap
 
 The project consists mainly of:
 
-- tubelex.py: a script to create the word list,
-- tubelex-ja.tsv.xz: the word list (not normalized),
-- tubelex-ja-lower.tsv.xz: normalized version of the word list (alphabet is normalized to lower case and half-width).
+- [tubelex.py](tubelex.py): a script to create the word list,
+- [tubelex-ja.tsv.xz](results/tubelex-ja.tsv.xz): the word list (not normalized),
+- [tubelex-ja-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): normalized version of the word list (alphabet is normalized to lower case and half-width).
 
 The words were segmented with MeCab using Unidic 3.1.0. Words that contain decimal digits (except kanji characters for numbers), words that start or end with a non-word character (e.g. punctuation) were ignored.
 
@@ -20,24 +20,22 @@ For each word we count:
 
 For a small number of videos there is no channel information, so we count them as separate single-video channels. Words occurring in less than 3 videos are not included.
 
-The list is sorted by number of occurrences and contains totals on the last row labeled "TOTAL". Note that totals are not sums of the previous rows' values.
+The list is sorted by number of occurrences and contains totals on the last row labeled `TOTAL`. Note that totals are not sums of the previous rows' values.
 
-The form is thus similar, yet slightly different from [wikipedia-word-frequency]https://github.com/notani/wikipedia-word-frequency]. Notable differences:
+The form is thus similar, yet slightly different from [wikipedia-word-frequency](https://github.com/notani/wikipedia-word-frequency). Notable differences:
 - TUBELEX-JA counts also videos and channels that words appear in (WWF counts only occurrences),
 - TUBELEX-JA has both a raw version and a normalized version (WWF lowercases words),
 - TUBELEX-JA includes totals on the trailing row (WWF does not),
 - TUBELEX-JA data is tab-separated with header (WWF data is space-separated without header),
 - TUBELEX-JA does proper segmentation of Japanese.
 
-The script, which was used to create the word list, processes subtitles from the [JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) repository according to the following steps:
-
-0. Download **manual** subtitles from `ja/202103.csv` that are still available now (as of 2022-11-30).
+As a basis for the corpus we used manual subtitles listed in the file `data/ja/202103.csv` from the [JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) repository that were still available as of as of 30 November 2022. (The script for downloading is also part of that repository.) The download subtitles were then processed using the [tubelex.py](tubelex.py) according to the following steps:
 
 1. Extract lines of subtitles and convert HTML (e.g. &amp;) entities to characters.
 
 2. Remove the following text sequences:
   - formatting tags,
-  - addresses (http(s), e-mail, domain names starting with "www.", social network handles starting with "@").
+  - addresses (http(s), e-mail, domain names starting with `www.`, social network handles starting with `@`).
 
 3. Remove the following lines:
   - empty lines,
@@ -45,15 +43,17 @@ The script, which was used to create the word list, processes subtitles from the
   - lines composed entirely of non-Japanese characters,
 
 4. Remove the following files:
-  - <3 lines,
-  - <70% Japanese characters,
-  - <95% lines identified as Japanese language using a FastText model,
+  - < 3 lines,
+  - < 70 % Japanese characters,
+  - < 95 % lines identified as Japanese language using a FastText model,
 
 5. Remove near-duplicates of other files.
-  
-Near duplicates are files with cosine similarity >= 0.95 between their 1-gram TF-IDF vectors. We make a reasonable effort to minimize the number of duplicates removed. (Minimum vertex cover is NP-hard.)
 
-See the source code for more details.
+6. Create the word list (both raw and normalized) as described initially.
+  
+Near duplicates are files with cosine similarity >= 0.95 between their 1-gram TF-IDF vectors. We make a reasonable effort to minimize the number of duplicates removed. (Minimum vertex cover is NP-hard.) See the source code for more details on this and other points.
+
+Note that the script saves intermediate files after cleaning and removing duplicates, and has several options (see `python tubelex.py --help`).
 
 ## Cleaning statistics (steps 2-4):
 
@@ -78,34 +78,33 @@ See the source code for more details.
   - 1686 duplicates to remove
   - 72646 unique files
 
-
 # Usage
 
-Note that the output of the script is already included in the repository. But you can reproduce it by following the steps below. 
+Note that the output of the script is already included in the repository. But you can reproduce it by following the steps below. Results will vary based on the YouTube videos/subtitles still available for download.
 
-Install the Git submodule for JTubeSpeech:
+1. Install the Git submodule for JTubeSpeech:
 
-    git submodule init && git submodule update
+    ```git submodule init && git submodule update```
     
-Optionally, modify its download script to download only subtitles without video. (TODO fork and publish.)
+2. Install requirements for both tubelex (see [requirements.txt](requirements.txt)) and JTubeSpeech.
 
-Download the current Wikipedia dumps:
+3. Optionally, modify JTubeSpeech's download script to download only subtitles without video, and/or adjust the delay between individual downloads. (TODO fork and publish.)
 
-    wget -np -r --accept-regex 'https://dumps.wikimedia.org/enwiki/20150602/enwiki-20150602-pages-articles[0-9].*' https://dumps.wikimedia.org/enwiki/20150602/
+4. Download manual subtitles using the download script:
+
+    ```cd jtubespeech; python scripts/download_video.py ja data/ja/202103.csv; cd ..```
+
+5. Clean, remove duplicates and compute frequencies saving output with LZMA compression in the current directory:
     
-Clean, remove duplicates and compute frequencies saving output with LZMA compression:
+    ```python tubelex.py -x```
+
+6. Alternatively consult the help and process the files as you see fit:
+
+    ```python tubelex.py --help```
     
-	tubelex.py -x
-    
-Optionally remove the language model and intermediate files:
+7. Optionally remove the language identification model, intermediate files and the downloaded subtitles to save disk space:
 
-	rm *.ftz *.zip
-    
-# To do
+    ```rm *.ftz *.zip; rm -r jtubespeech/video```
 
+# Results
 
-
-
-# Ideas for future
-
-Currently we are not using Channel IDs.
