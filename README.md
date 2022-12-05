@@ -1,7 +1,7 @@
 # About TUBELEX-JA
 
 
-Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Japanese subtitles for YouTube videos.
+Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Japanese subtitles for YouTube videos (48M tokens from 72k subtitle files).
 
 The project consists mainly of:
 
@@ -76,7 +76,7 @@ Note that the output of the script is already included in the repository. But yo
 
 # Results
 
-After cleaning and duplicate removal, there are 48,468,231 tokens. The word list consists of 126,509 words (123,407 normalized words) occurring in at least 3 videos.
+After cleaning and duplicate removal, there are **48,468,231 tokens**. The word list consists of **126,509 words** (123,407 normalized words) occurring in at least 3 videos.
 
 ## Cleaning statistics (steps 2-4 above):
 
