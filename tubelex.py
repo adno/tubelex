@@ -538,7 +538,7 @@ def do_unique(
         print(f'Duplicate (similarity >= {SIMILARITY_LIMIT}) stats:')
         print(f'  {len(files[:limit])} total')
         print(f'  {len(dup_indices)} duplicates removed')
-        print(f'  {len(files[:limit])-len(dup_indices)} unique files')
+        print(f'  {len(files[:limit])-len(dup_indices)} valid files')
         print()
 
         sorted_dup_indices = sorted(dup_indices)
@@ -558,7 +558,7 @@ def do_unique(
         iter_dup = iter(sorted_dup_indices)
         next_dup = next(iter_dup, None)
         for i, (file,  text) in tqdm(
-            desc='Copying unique files',
+            desc='Copying valid files',
             iterable=enumerate(zip(files[:limit], iter_contents(limit))),
             total=len(files[:limit])
             ):
