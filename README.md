@@ -18,7 +18,7 @@ For each word, we count:
 - number of videos,
 - number of channels.
 
-For a small number of videos, there is no channel information, so we count them as separate single-video channels. Words occurring in less than 3 videos are not included. The list is sorted by the number of occurrences and contains totals on the last row labeled `TOTAL`. Note that totals are not sums of the previous rows' values. The data is tab-separated with a header, and the file is compressed with LZMA2 (`xz`).
+For a small number of videos, there is no channel information, so we count them as separate single-video channels. Words occurring in less than 3 videos are not included. The list is sorted by the number of occurrences and contains totals on the last row labeled `[TOTAL]`. Note that totals are not sums of the previous rows' values. The data is tab-separated with a header, and the file is compressed with LZMA2 (`xz`).
 
 As a basis for the corpus, we used manual subtitles listed in the file `data/ja/202103.csv` from the [JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) repository that were still available as of 30 November 2022. (The script for downloading is also part of that repository.) The download subtitles were then processed using the [tubelex.py](tubelex.py) script according to the following steps:
 
