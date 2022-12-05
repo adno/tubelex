@@ -1,0 +1,22 @@
+Cleaning stats:
+* files (determined after sequence removal and line filtering):
+  103887 total
+  7689 too short (<3 lines)
+  4925 not enough J. characters (<0.7 characters)
+  16941 not enough J. lines (<0.95 identified as Japanese)
+  74332 valid files after cleaning
+* sequences removed from valid files:
+  129280 tags
+  1659 addresses
+* lines in valid files:
+  8108028 total lines
+  2004 whitespace-only lines
+  41200 repeated lines
+  61780 lines composed of non-Japanese characters
+  8003044 valid lines after cleaning
+
+Duplicate (similarity >= 0.95) stats:
+  74332 total
+  1686 duplicates removed
+  72646 unique files
+

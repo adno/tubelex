@@ -1,0 +1,3 @@
+[submodule "jtubespeech"]
+	path = jtubespeech
+	url = https://github.com/sarulab-speech/jtubespeech
