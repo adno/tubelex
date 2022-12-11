@@ -6,12 +6,16 @@ Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Jap
 The project consists mainly of:
 
 - [tubelex.py](tubelex.py): a script to create the word list,
-- [tubelex-ja.tsv.xz](results/tubelex-ja.tsv.xz): the word list (not normalized),
-- [tubelex-ja-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): normalized version of the word list (alphabet is normalized to lower case and half-width).
+- [tubelex-ja.tsv.xz](results/tubelex-ja.tsv.xz): the word list (Unidic Lite, not normalized),
+- [tubelex-ja-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): normalized version of the word list above.
+- [tubelex-ja-310.tsv.xz](results/tubelex-ja-310.tsv.xz): the word list (Unidic 3.1.0, not normalized),
+- [tubelex-ja-310-lower.tsv.xz](results/tubelex-ja-310-lower.tsv.xz): normalized version of the word list above.
 
-The words are segmented with MeCab using Unidic 3.1.0. Words that contain decimal digits (except kanji characters for numbers) and words that start or end with a non-word character (e.g. punctuation) are ignored.
+The word list has four versions differing in segmentation and normalization. Words are segmented with MeCab using [Unidic Lite](https://github.com/polm/unidic-lite), or alternatively with Unidic 3.1.0. Words that contain decimal digits (except kanji characters for numbers) and words that start or end with a non-word character (e.g. punctuation) are ignored in both cases.
 
-In the raw version, letters may be upper- or lower-case, full-width or ordinary, i.e. half-width. In the normalized version, letters are lower-case and half-width. This concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is normalized to ω).
+Note that Unidic Lite is often used for Japanese segmentation in Python due to its ease of installation (see  [Fugashi](https://pypi.org/project/fugashi/) for more info). Unidic Lite is also used for tokenization of [a commonly used Japanese BERT model](https://huggingface.co/cl-tohoku/bert-base-japanese-v2). That said, Unidic 3.1.0 is of course larger and more up to date.
+
+In the raw version, letters may be upper- or lower-case, full-width or ordinary, i.e. half-width. In the normalized version, letters are lower-case and half-width (after segmentation). This concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is normalized to ω).
 
 For each word, we count:
 - number of occurrences,
@@ -42,9 +46,9 @@ As a basis for the corpus, we used manual subtitles listed in the file `data/ja/
 
 6. Create the word list (both raw and normalized) as described initially.
   
-Near-duplicates are files with cosine similarity >= 0.95 between their 1-gram TF-IDF vectors. We make a reasonable effort to minimize the number of duplicates removed. See the source code for more details on this and other points.
+Near-duplicates are files with cosine similarity >= 0.95 between their 1-gram TF-IDF vectors. We make a reasonable effort to minimize the number of duplicates removed. See the source code for more details on this and other points. For consistency, we have used Unidic Lite for building TF-IDF regardless of the final segmentation used for frequency counting.
 
-Note that the script saves intermediate files after cleaning and removing duplicates, and has several options (see `python tubelex.py --help`).
+Note that the script saves intermediate files after cleaning and removing duplicates, and has various options we do not describe here (see `python tubelex.py --help`).
 
 # Usage
 
@@ -54,7 +58,9 @@ Note that the output of the script is already included in the repository. You ca
 
     ```git submodule init && git submodule update```
     
-2. Install requirements for both tubelex (see [requirements.txt](requirements.txt)) and JTubeSpeech.
+2. Install requirements for both tubelex (see [requirements.txt](requirements.txt)) and JTubeSpeech. The `unidic` package (as opposed to `unidic-lite`) requires an additional installation step:
+	
+	```python -m unidic download```
 
 3. Optionally, modify JTubeSpeech's download script to download only subtitles without videos and/or adjust the delay between individual downloads. (TODO fork and publish.)
 
@@ -64,7 +70,11 @@ Note that the output of the script is already included in the repository. You ca
 
 5. Clean, remove duplicates and compute frequencies saving output with LZMA compression in the current directory:
     
-    ```python tubelex.py -x```
+    ```
+    python tubelex.py -x --unique --clean
+    python tubelex.py -x --frequencies -o tubelex-ja.tsv.xz -O tubelex-ja-lower.tsv.xz
+    python tubelex.py -x --frequencies -D unidic -o tubelex-ja-310.tsv.xz -O tubelex-ja-310-lower.tsv.xz
+    ```
 
 6. Alternatively, consult the help and process the files as you see fit:
 
@@ -76,7 +86,7 @@ Note that the output of the script is already included in the repository. You ca
 
 # Results
 
-After cleaning and duplicate removal, there are **48,468,231 tokens**. The word list consists of **126,509 words** (123,407 normalized words) occurring in at least 3 videos.
+After cleaning and duplicate removal, there are **48,416,404 tokens**. The word list consists of **124,222 words** (121,077 normalized words) occurring in at least 3 videos. (The numbers differ slightly for the Unidic 3.1.0 version.)
 
 We have not attempted to analyze the corpus/frequencies, or compare them with word lists based on smaller but more carefully curated corpora of spoken Japanese, such as [CSJ](https://clrd.ninjal.ac.jp/csj/index.html) (7M tokens). Note that there is also [LaboroTVSpeech](https://laboro.ai/activity/column/engineer/eg-laboro-tv-corpus-jp/) (22M tokens) based on TV subtitles.
 

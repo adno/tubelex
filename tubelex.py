@@ -1,9 +1,4 @@
-# Requires fasttext, tqdm, fugashi, sklearn
-#
-# Please install fugashi and unidic this way:
-#   pip install fugashi[unidic]
-#   python -m unidic download
-
+# Requires fasttext, tqdm, fugashi, unidic, unidic-lite, sklearn
 import re
 import os
 import sys
@@ -25,7 +20,8 @@ import pandas as pd  # type: ignore
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
-from fugashi import Tagger  # type: ignore
+import fugashi
+from ja_utils import LCASE_FW2HW, fugashi_tagger
 
 # We use the smaller model from
 # https://fasttext.cc/docs/en/language-identification.html
@@ -152,8 +148,32 @@ def parse() -> argparse.Namespace:
         '--channel-stats', type=str, default=None,
         help='Output filename for channel stats (computed together with frequencies)'
         )
+    dic_group = parser.add_mutually_exclusive_group()
+    dic_group.add_argument(
+        '--dicdir', type=str, default=None,
+        help='Dictionary directory for fugashi/MeCab.'
+        )
+    dic_group.add_argument(
+        '--dictionary', '-D', choices=('unidic', 'unidic-lite'), default=None,
+        help='Dictionary (installed as a Python package) for fugashi/MeCab.'
+        )
 
     return parser.parse_args()
+
+
+def tagger_from_args(args: argparse.Namespace) -> fugashi.GenericTagger:
+    # We always specificy dicdir EXPLICITLY
+    if args.dicdir is not None:
+        dicdir = args.dicdir
+    else:
+        if args.dictionary == 'unidic':
+            import unidic
+            dicdir = unidic.DICDIR
+        else:
+            assert args.dictionary is None or args.dictionary == 'unidic-lite'
+            import unidic_lite
+            dicdir = unidic_lite.DICDIR
+    return fugashi_tagger(dicdir)
 
 
 @contextmanager
@@ -208,11 +228,6 @@ RE_WHITESPACE_ONLY = re.compile(r'^\s*$')
 # YouTube subtitles contain only the following entities:
 ENTITY2STR = {'lt': '<', 'gt': '>', 'nbsp': ' ', 'amp': '&', 'lrm': ''}
 RE_ENTITY  = re.compile(r'&(%s);' % '|'.join(ENTITY2STR))
-
-LCASE_FW2HW = dict(zip(
-    range(ord('ａ'), ord('ｚ') + 1),
-    range(ord('a'), ord('z') + 1)
-    ))  # Used with str.translate() after lowercasing
 
 
 def repl_entities(m):
@@ -668,7 +683,7 @@ def do_frequencies(
                     )
 
             f.write(
-                line_format % ('TOTAL', n_words, n_videos, n_channels_and_no_channels)
+                line_format % ('[TOTAL]', n_words, n_videos, n_channels_and_no_channels)
                 )
 
 
@@ -688,7 +703,7 @@ def main() -> None:
         do_clean(storage, limit=limit)
 
     if unique or frequencies:
-        tagger = Tagger('-Owakati')
+        tagger = tagger_from_args(args)
 
         def tokenize(s: str) -> list[str]:
             # TfidfVectorizer requires a list of strings:

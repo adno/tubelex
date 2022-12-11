@@ -1,3 +1,12 @@
+# macOS
 .DS_Store
-TODO
+
+# Python
 __pycache__/
+
+# development
+*.bbprojectd/
+TODO
+TODO/
+/zz-*/
+/00-*/
