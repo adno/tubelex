@@ -13,9 +13,13 @@ The project consists mainly of:
 
 The word list has four versions differing in segmentation and normalization. Words are segmented with MeCab using [Unidic Lite](https://github.com/polm/unidic-lite), or alternatively with Unidic 3.1.0. Words that contain decimal digits (except kanji characters for numbers) and words that start or end with a non-word character (e.g. punctuation) are ignored in both cases.
 
+<<<<<<< HEAD
 Note that Unidic Lite is often used for Japanese segmentation in Python due to its ease of installation (see  [Fugashi](https://pypi.org/project/fugashi/) for more info). Unidic Lite is also used for tokenization of [a commonly used Japanese BERT model](https://huggingface.co/cl-tohoku/bert-base-japanese-v2). That said, Unidic 3.1.0 is of course larger and more up to date.
 
 In the raw version, letters may be upper- or lower-case, full-width or ordinary, i.e. half-width. In the normalized version, letters are lower-case and half-width (after segmentation). This concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is normalized to ω).
+=======
+In the raw version, letters may be upper- or lower-case, full-width or ordinary, i.e. half-width. In the normalized version, letters are lower-case and half-width. The case normalization concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is normalized to ω).
+>>>>>>> bde72b5e60ccc675b68c66b33eef501a70219974
 
 For each word, we count:
 - number of occurrences,
@@ -88,8 +92,6 @@ Note that the output of the script is already included in the repository. You ca
 
 After cleaning and duplicate removal, there are **48,416,404 tokens**. The word list consists of **124,222 words** (121,077 normalized words) occurring in at least 3 videos. (The numbers differ slightly for the Unidic 3.1.0 version.)
 
-We have not attempted to analyze the corpus/frequencies, or compare them with word lists based on smaller but more carefully curated corpora of spoken Japanese, such as [CSJ](https://clrd.ninjal.ac.jp/csj/index.html) (7M tokens). Note that there is also [LaboroTVSpeech](https://laboro.ai/activity/column/engineer/eg-laboro-tv-corpus-jp/) (22M tokens) based on TV subtitles.
-
 ## Cleaning statistics (steps 2-4 above):
 
 * files (determined after sequence removal and line filtering):
@@ -112,3 +114,11 @@ We have not attempted to analyze the corpus/frequencies, or compare them with wo
   - 74332 total
   - 1686 duplicates to remove
   - 72646 valid files
+
+# Further work and similar lists
+
+The word lists contains only the surface forms of the words (segments). For many purposes, lemmas, POS and other information would be more more useful. We plan to add further processing later.
+
+We have not attempted yet to analyze the corpus/word list, or compare it with word lists based on smaller but more carefully curated corpora of spoken Japanese. The largest corpus of such kind would be [CSJ](https://clrd.ninjal.ac.jp/csj/index.html) (7M tokens, with publicly available [word lists](https://clrd.ninjal.ac.jp/csj/chunagon.html#data)), other, smaller corpora include [CEJC](https://www2.ninjal.ac.jp/conversation/corpus.html), [NUCC](https://mmsrv.ninjal.ac.jp/nucc/), [J-TOCC](http://nakamata.info/database/), and [BTSJ](https://ninjal-usamilab.info/btsj_corpus/).
+
+Note that there is also a large corpus based on TV subtitles [LaboroTVSpeech](https://laboro.ai/activity/column/engineer/eg-laboro-tv-corpus-jp/) (22M tokens), which can be used for free for academic purposes (application necessary).
