@@ -21,7 +21,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
 import fugashi
-from ja_utils import LCASE_FW2HW, fugashi_tagger
+from ja_utils import RE_WORD, LCASE_FW2HW, fugashi_tagger
 
 # We use the smaller model from
 # https://fasttext.cc/docs/en/language-identification.html
@@ -46,11 +46,6 @@ DEFAULT_CHANNEL_STATS_PATH = 'tubelex-ja-channels.tsv'  # See CLI arguments
 DEFAULT_MIN_VIDEOS = 3                    # See CLI arguments
 DEFAULT_MIN_CHANNELS = 3                # See CLI arguments
 LINEAR_KERNEL_CHUNK_SIZE = 10000
-
-# Note: \w includes accented chars, CJK, etc.
-is_word_re = re.compile(r'^\w.*\w$')
-# Note: \d includes decimals in many scripts, but not CJK
-not_is_word_re = re.compile(r'.*\d.*')
 
 Tokenizer = Callable[[str], list[str]]
 
@@ -703,15 +698,11 @@ def main() -> None:
         do_clean(storage, limit=limit)
 
     if unique or frequencies:
-        tagger = tagger_from_args(args)
+        tagger_parse = tagger_from_args(args).parse
 
         def tokenize(s: str) -> list[str]:
             # TfidfVectorizer requires a list of strings:
-            return [
-                word
-                for word in tagger.parse(s).split(' ')
-                if is_word_re.match(word) and not not_is_word_re.match(word)
-                ]
+            return [word for word in tagger_parse(s).split(' ') if RE_WORD.match(word)]
 
         if unique:
             nmin: int = args.nmin
