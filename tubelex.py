@@ -4,7 +4,7 @@ import os
 import sys
 from enum import Enum
 from collections.abc import Iterator, Iterable, Callable
-from typing import Optional, Union
+from typing import Optional, Union, NamedTuple
 from collections import defaultdict, Counter
 from urllib.request import urlretrieve
 from contextlib import contextmanager
@@ -20,9 +20,9 @@ import pandas as pd  # type: ignore
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
-import fugashi
-from ja_utils import RE_WORD, LCASE_FW2HW, fugashi_tagger
-
+from ja_utils import get_re_word, WAVE_DASH, tagger_from_args, \
+    NORMALIZE_FULLWIDTH_TILDE
+from unicodedata import normalize as unicode_normalize
 # We use the smaller model from
 # https://fasttext.cc/docs/en/language-identification.html
 FT_LID_MODEL_PATH = 'lid.176.ftz'
@@ -40,14 +40,50 @@ SUBLIST_PATH = 'jtubespeech/data/ja/202103.csv'
 DATA_SUFFIX = '.txt'
 CLEAN_PATH = 'clean-ja'
 UNIQUE_PATH = 'unique-ja'
-DEFAULT_FREQ_PATH = 'tubelex-ja.tsv'    # See CLI arguments
-DEFAULT_NORM_FREQ_PATH = 'tubelex-ja-lower.tsv'    # See CLI arguments
+DEFAULT_FREQ_PATH = 'tubelex-ja%.tsv'    # See CLI arguments
 DEFAULT_CHANNEL_STATS_PATH = 'tubelex-ja-channels.tsv'  # See CLI arguments
 DEFAULT_MIN_VIDEOS = 3                    # See CLI arguments
 DEFAULT_MIN_CHANNELS = 3                # See CLI arguments
 LINEAR_KERNEL_CHUNK_SIZE = 10000
+NORMALIZED_SUFFIX_FNS = (
+    (False, '', None),
+    (True, '-lower', lambda w: w.lower()),
+    (True, '-nfkc', lambda w: unicode_normalize('NFKC', w)),
+    (True, '-nfkc-lower', lambda w: unicode_normalize('NFKC', w).lower())
+    )
+
 
 Tokenizer = Callable[[str], list[str]]
+
+
+class TubeCounter(NamedTuple):
+    word_count: Counter[str]
+    word_videos: dict[str, set[int]]
+    word_channels: dict[str, set[Union[int, str]]]
+
+    @staticmethod
+    def new() -> 'TubeCounter':
+        return TubeCounter(
+            word_count=Counter(),
+            word_videos=defaultdict(set),
+            word_channels=defaultdict(set)
+            )
+
+    def add(self, words: Iterable[str], video_no: int, channel_id: Union[int, str]):
+        word_count = self.word_count
+        word_videos = self.word_videos
+        word_channels = self.word_channels
+        for w in words:
+            word_count[w] += 1
+            word_videos[w].add(video_no)
+            word_channels[w].add(channel_id)
+
+    def remove_less_than_min_videos(self, min_videos: int):
+        word_count = self.word_count
+        word_videos = self.word_videos
+        for word, videos in word_videos.items():
+            if len(videos) < min_videos:
+                del word_count[word]
 
 
 class Storage(Enum):
@@ -130,13 +166,10 @@ def parse() -> argparse.Namespace:
         )
     parser.add_argument(
         '--output', '-o', type=str, default=None,
-        help='Output filename for frequencies'
-        )
-    parser.add_argument(
-        '--output-normalized', '-O', type=str, default=None,
         help=(
-            'Output filename for frequencies of normalized words '
-            '(lowercased and half-width Latin characters)'
+            'Output filename for frequencies. If the placeholder "%" is present, it '
+            'is replaced with a string identifying the normalization. Otherwise, '
+            'output only unnormalized data.'
             )
         )
     parser.add_argument(
@@ -154,21 +187,6 @@ def parse() -> argparse.Namespace:
         )
 
     return parser.parse_args()
-
-
-def tagger_from_args(args: argparse.Namespace) -> fugashi.GenericTagger:
-    # We always specificy dicdir EXPLICITLY
-    if args.dicdir is not None:
-        dicdir = args.dicdir
-    else:
-        if args.dictionary == 'unidic':
-            import unidic
-            dicdir = unidic.DICDIR
-        else:
-            assert args.dictionary is None or args.dictionary == 'unidic-lite'
-            import unidic_lite
-            dicdir = unidic_lite.DICDIR
-    return fugashi_tagger(dicdir)
 
 
 @contextmanager
@@ -190,6 +208,8 @@ def get_write_file(path: str, storage: Storage):
         if storage.zip_compression is not None:
             zf.close()
 
+
+RE_WORD = get_re_word(allow_start_end=WAVE_DASH)
 
 RE_JAPANESE_1C = (
     # Based on http://www.localizingjapan.com/blog/2012/01/20/regular-expressions-for-\
@@ -342,6 +362,7 @@ def dir_files(path: str) -> Iterator[tuple[str, str]]:
 
 @contextmanager
 def get_files_contents(path: str, storage: Storage):
+    zf = None
     try:
         if storage.zip_compression is not None:
             zf = ZipFile(path + '.zip', 'r')
@@ -362,7 +383,7 @@ def get_files_contents(path: str, storage: Storage):
 
         yield (files, iter_contents)
     finally:
-        if storage.zip_compression is not None:
+        if zf is not None:
             zf.close()
 
 
@@ -583,7 +604,6 @@ def do_frequencies(
     limit: Optional[int],
     tokenize: Tokenizer,
     path: Optional[str],
-    norm_path: Optional[str],
     channel_stats_path: Optional[str],
     min_videos: int,
     min_channels: int
@@ -611,15 +631,19 @@ def do_frequencies(
             f.write(f'{n}\t{chn}\n')
         f.write(f'NO_CHANNEL_ID\t{n_no_channel}\n')
 
-    # Originally based on gather_wordfreq.py
+    freq_path: str  = path or (DEFAULT_FREQ_PATH + storage.suffix)
+    do_norm         = '%' in freq_path
 
-    word_count: Counter[str, int] = Counter()
-    word_videos: dict[str, set[int]] = defaultdict(set)
-    word_channels: dict[str, set[Union[int, str]]] = defaultdict(set)
+#     word_count: Counter[str] = Counter()
+#     word_videos: dict[str, set[int]] = defaultdict(set)
+#     word_channels: dict[str, set[Union[int, str]]] = defaultdict(set)
 
-    norm_word_count: Counter[str, int] = Counter()
-    norm_word_videos: dict[str, set[int]] = defaultdict(set)
-    norm_word_channels: dict[str, set[Union[int, str]]] = defaultdict(set)
+    NORMALIZED_SUFFIX_FNS
+
+    counters: dict[str, TubeCounter] = {
+        suffix: TubeCounter.new() for normalized, suffix, __ in NORMALIZED_SUFFIX_FNS
+        if do_norm or not normalized
+        }
 
     n_words = 0
 
@@ -634,37 +658,34 @@ def do_frequencies(
             video_id = file.removesuffix(DATA_SUFFIX)
             # Videos without a channel id are counted as unique 1-video channels:
             channel_id = channel_ids.loc[video_id] or video_no
+            # Normalize tilde: always AND before tokenization:
+            text = text.translate(NORMALIZE_FULLWIDTH_TILDE)
             words = tokenize(text)
-            for w in words:
-                word_count[w] += 1
-                word_videos[w].add(video_no)
-                word_channels[w].add(channel_id)
 
-                nw = w.lower().translate(LCASE_FW2HW)    # normalize
-                norm_word_count[nw] += 1
-                norm_word_videos[nw].add(video_no)
-                norm_word_channels[nw].add(channel_id)
+            for __, suffix, norm_fn in NORMALIZED_SUFFIX_FNS:
+                c = counters.get(suffix)
+                if c is not None:
+                    c.add(
+                        map(norm_fn, words) if (norm_fn is not None) else words,
+                        video_no=video_no,
+                        channel_id=channel_id
+                        )
+            n_words += len(words)  # count before removing low-freq words
 
-                n_words += 1  # count before removing low-freq words
-
-        for word, videos in word_videos.items():
-            if len(videos) < min_videos:
-                del word_count[word]
-
-        for word, videos in norm_word_videos.items():
-            if len(videos) < min_videos:
-                del norm_word_count[word]
+        for c in counters.values():
+            c.remove_less_than_min_videos(min_videos)
 
     line_format = '%s\t%d\t%d\t%d\n'
-    with storage.open(path or (DEFAULT_FREQ_PATH + storage.suffix), 'wt') as uf, \
-        storage.open(
-            norm_path or (DEFAULT_NORM_FREQ_PATH + storage.suffix), 'wt'
-            ) as nf:
 
-        for (f, w_count, w_videos, w_channels) in (
-            (uf, word_count, word_videos, word_channels),
-            (nf, norm_word_count, norm_word_videos, norm_word_channels)
-            ):
+    for suffix, c in counters.items():
+        with storage.open(
+            freq_path.replace('%', suffix),  # no effect if not do_norm (no '%')
+            'wt'
+            ) as f:
+
+            w_count     = c.word_count
+            w_videos    = c.word_videos
+            w_channels  = c.word_channels
 
             words = sorted(w_count, key=w_count.__getitem__, reverse=True)
 
@@ -722,7 +743,6 @@ def main() -> None:
                 tokenize=tokenize,
                 limit=limit,
                 path=args.output,
-                norm_path=args.output_normalized,
                 channel_stats_path=args.channel_stats,
                 min_videos=min_videos,
                 min_channels=min_channels

@@ -1,28 +1,42 @@
 # About TUBELEX-JA
 
-
 Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Japanese subtitles for YouTube videos (93M tokens from 72k subtitle files).
 
 The project consists mainly of:
 
-- [tubelex.py](tubelex.py): a script to create the word list,
-- [tubelex-ja.tsv.xz](results/tubelex-ja.tsv.xz): the word list (Unidic Lite, not normalized),
-- [tubelex-ja-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): normalized version of the word list above.
-- [tubelex-ja-310.tsv.xz](results/tubelex-ja-310.tsv.xz): the word list (Unidic 3.1.0, not normalized),
-- [tubelex-ja-310-lower.tsv.xz](results/tubelex-ja-310-lower.tsv.xz): normalized version of the word list above.
-
-The word list has four versions differing in segmentation and normalization. Words are segmented with MeCab using [Unidic Lite](https://github.com/polm/unidic-lite), or alternatively with Unidic 3.1.0. Words that contain decimal digits (except kanji characters for numbers) and words that start or end with a non-word character (e.g. punctuation) are ignored in both cases.
-
-Note that Unidic Lite is often used for Japanese segmentation in Python due to its ease of installation (see  [Fugashi](https://pypi.org/project/fugashi/) for more info). Unidic Lite is also used for tokenization of [a commonly used Japanese BERT model](https://huggingface.co/cl-tohoku/bert-base-japanese-v2). That said, Unidic 3.1.0 is of course larger and more up to date.
-
-In the raw version, letters may be upper- or lower-case, full-width or ordinary, i.e. half-width. In the normalized version, letters are lower-case and half-width. The case normalization concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is normalized to ω).
-
+- [tubelex.py](tubelex.py): a script to create the word list
+- the word list in several mutations:
+  - segmented with Unidic Lite:
+	- [tubelex-ja.tsv.xz](results/tubelex-ja.tsv.xz): no normalization,
+	- [tubelex-ja-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): no normalization, lowercased,
+	- [tubelex-ja-nfkc.tsv.xz](results/tubelex-ja-lower.tsv.xz): NFKC normalization
+	- [tubelex-ja-nfkc-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): NFKC normalization, lowercased
+  - segmented with Unidic 3.1.0:
+	- [tubelex-ja-310.tsv.xz](results/tubelex-ja.tsv.xz): no normalization,
+	- [tubelex-ja-310-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): no normalization, lowercased,
+	- [tubelex-ja-310-nfkc.tsv.xz](results/tubelex-ja-lower.tsv.xz): NFKC normalization
+	- [tubelex-ja-310-nfkc-lower.tsv.xz](results/tubelex-ja-lower.tsv.xz): NFKC normalization, lowercased
+	
 For each word, we count:
 - number of occurrences,
 - number of videos,
 - number of channels.
 
-For a small number of videos, there is no channel information, so we count them as separate single-video channels. Words occurring in less than 3 videos are not included. The list is sorted by the number of occurrences and contains totals on the last row labeled `[TOTAL]`. Note that totals are not sums of the previous rows' values. The data is tab-separated with a header, and the file is compressed with LZMA2 (`xz`).
+For a small number of videos, there is no channel information, so we count them as separate single-video channels. Words occurring in less than 3 videos are not included. The list is sorted by the number of occurrences. The data is tab-separated with a header, and the file is compressed with LZMA2 (`xz`).
+
+**Important:** The last row labeled `[TOTAL]` lists **total numbers** of tokens, videos and channels, and thus may **require special handling**. Also note that the totals are not sums of the previous rows' values.**
+
+## About mutations
+
+Words are segmented with MeCab using [Unidic Lite](https://github.com/polm/unidic-lite), or alternatively with Unidic 3.1.0. Words that contain decimal digits (except kanji characters for numbers) and words that start or end with a non-word character (e.g. punctuation) are ignored in both cases. The [full-width tilde](https://ja.wikipedia.org/wiki/チルダ#全角チルダ) character (0xFF5E, '～') is replaced by the [wave dash](https://ja.wikipedia.org/wiki/波ダッシュ) character (0x301C, '〜') before tokenization. The former is almost always a visually indistinguishable typo. We consider the wave dash a word-forming character similarly to alphabet, kanji etc.
+
+Unidic Lite is often used for Japanese segmentation in Python due to its ease of installation (see  [Fugashi](https://pypi.org/project/fugashi/) for more info). Unidic Lite is also used for tokenization of [a commonly used Japanese BERT model](https://huggingface.co/cl-tohoku/bert-base-japanese-v2). That said, Unidic 3.1.0 is of course larger and more up to date.
+
+One of the possible motivations for using [NFKC](http://unicode.org/reports/tr15/)-normalized data is that `BertJapaneseTokenizer` class used by the aforementioned model performs it by default. Among others, letters of Latin alphabet and katakana are normalized in NFKC, which is quite reasonable. On the other hand, since we do it after segmentation, it reintroduces tokens containing decimal digits (e.g. by converting "⑮" to "15").
+
+Without normalization and lowercasing, letters may be upper- or lower-case, full-width or ordinary, i.e. half-width, katakana may be full-width or half-width etc. The lowercasing concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is lowercased to ω).
+
+## About corpus and processing
 
 As a basis for the corpus, we used manual subtitles listed in the file `data/ja/202103.csv` from the [JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) repository that were still available as of 30 November 2022. (The script for downloading is also part of that repository.) The download subtitles were then processed using the [tubelex.py](tubelex.py) script according to the following steps:
 
@@ -72,8 +86,8 @@ Note that the output of the script is already included in the repository. You ca
     
     ```
     python tubelex.py -x --clean --unique
-    python tubelex.py -x --frequencies -o tubelex-ja.tsv.xz -O tubelex-ja-lower.tsv.xz
-    python tubelex.py -x --frequencies -D unidic -o tubelex-ja-310.tsv.xz -O tubelex-ja-310-lower.tsv.xz
+    python tubelex.py -x --frequencies -o tubelex-ja%.tsv.xz
+    python tubelex.py -x --frequencies -D unidic -o tubelex-ja-310%.tsv.xz
     ```
 
 6. Alternatively, consult the help and process the files as you see fit:
@@ -86,7 +100,7 @@ Note that the output of the script is already included in the repository. You ca
 
 # Results
 
-After cleaning and duplicate removal, there are **93,161,375 tokens**. The word list consists of **127,681 words** (124,449 normalized words) occurring in at least 3 videos. (The numbers differ slightly for the Unidic 3.1.0 version.)
+After cleaning and duplicate removal, there are **93,215,459 tokens**. The word list consists of **127,421 words** occurring in at least 3 videos (Unidic Lite segmentation, no normalization, no lowercasing). The number of words differs slightly for other mutations.
 
 ## Cleaning statistics (steps 2-4 above):
 
