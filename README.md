@@ -24,17 +24,17 @@ For each word, we count:
 
 For a small number of videos, there is no channel information, so we count them as separate single-video channels. Words occurring in less than 3 videos are not included. The list is sorted by the number of occurrences. The data is tab-separated with a header, and the file is compressed with LZMA2 (`xz`).
 
-**Important:** The last row labeled `[TOTAL]` lists **total numbers** of tokens, videos and channels, and thus may **require special handling**. Also note that the totals are not sums of the previous rows' values.**
+**Important:** The last row labeled `[TOTAL]` lists the **total numbers** of tokens, videos, and channels, and thus may **require special handling**. Also, note that the totals are not sums of the previous rows' values.
 
 ## About mutations
 
 Words are segmented with MeCab using [Unidic Lite](https://github.com/polm/unidic-lite), or alternatively with Unidic 3.1.0. Words that contain decimal digits (except kanji characters for numbers) and words that start or end with a non-word character (e.g. punctuation) are ignored in both cases. The [full-width tilde](https://ja.wikipedia.org/wiki/チルダ#全角チルダ) character (0xFF5E, '～') is replaced by the [wave dash](https://ja.wikipedia.org/wiki/波ダッシュ) character (0x301C, '〜') before tokenization. The former is almost always a visually indistinguishable typo. We consider the wave dash a word-forming character similarly to alphabet, kanji etc.
 
-Unidic Lite is often used for Japanese segmentation in Python due to its ease of installation (see  [Fugashi](https://pypi.org/project/fugashi/) for more info). Unidic Lite is also used for tokenization of [a commonly used Japanese BERT model](https://huggingface.co/cl-tohoku/bert-base-japanese-v2). That said, Unidic 3.1.0 is of course larger and more up to date.
+Unidic Lite is often used for Japanese segmentation in Python due to its ease of installation (see  [Fugashi](https://pypi.org/project/fugashi/) for more info). Unidic Lite is also used for tokenization of [a commonly used Japanese BERT model](https://huggingface.co/cl-tohoku/bert-base-japanese-v2). That said, Unidic 3.1.0 is, of course, larger and more up-to-date.
 
-One of the possible motivations for using [NFKC](http://unicode.org/reports/tr15/)-normalized data is that `BertJapaneseTokenizer` class used by the aforementioned model performs it by default. Among others, letters of Latin alphabet and katakana are normalized in NFKC, which is quite reasonable. On the other hand, since we do it after segmentation, it reintroduces tokens containing decimal digits (e.g. by converting "⑮" to "15").
+One of the possible motivations for using [NFKC](http://unicode.org/reports/tr15/)-normalized data is that `BertJapaneseTokenizer` class used by the aforementioned model performs it by default. Among others, letters of the Latin alphabet and katakana are normalized (to ordinary/half-width, and full-width, respectively) in NFKC, which is quite reasonable. On the other hand, since we do it after segmentation, it reintroduces tokens containing decimal digits (e.g. by converting "⑮" to "15").
 
-Without normalization and lowercasing, letters may be upper- or lower-case, full-width or ordinary, i.e. half-width, katakana may be full-width or half-width etc. The lowercasing concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is lowercased to ω).
+The lowercasing concerns not only the letters A-Z but also accented characters and letters of any cased alphabet (e.g. Ω is lowercased to ω).
 
 ## About corpus and processing
 
@@ -127,8 +127,8 @@ After cleaning and duplicate removal, there are **93,215,459 tokens**. The word 
 
 # Further work and similar lists
 
-The word lists contains only the surface forms of the words (segments). For many purposes, lemmas, POS and other information would be more more useful. We plan to add further processing later.
+The word list contains only the surface forms of the words (segments). For many purposes, lemmas, POS and other information would be more useful. We plan to add further processing later.
 
-We have not attempted yet to analyze the corpus/word list, or compare it with word lists based on smaller but more carefully curated corpora of spoken Japanese. The largest corpus of such kind would be [CSJ](https://clrd.ninjal.ac.jp/csj/index.html) (7M tokens, with publicly available [word lists](https://clrd.ninjal.ac.jp/csj/chunagon.html#data)), other, smaller corpora include [CEJC](https://www2.ninjal.ac.jp/conversation/corpus.html), [NUCC](https://mmsrv.ninjal.ac.jp/nucc/), [J-TOCC](http://nakamata.info/database/), and [BTSJ](https://ninjal-usamilab.info/btsj_corpus/).
+We have yet to attempt to analyze the corpus/word list, or compare it with word lists based on smaller but more carefully curated corpora of spoken Japanese. The largest corpus of such kind would be [CSJ](https://clrd.ninjal.ac.jp/csj/index.html) (7M tokens, with publicly available [word lists](https://clrd.ninjal.ac.jp/csj/chunagon.html#data)). Smaller corpora include [CEJC](https://www2.ninjal.ac.jp/conversation/corpus.html), [NUCC](https://mmsrv.ninjal.ac.jp/nucc/), [J-TOCC](http://nakamata.info/database/), and [BTSJ](https://ninjal-usamilab.info/btsj_corpus/).
 
 Note that there is also a large corpus based on TV subtitles [LaboroTVSpeech](https://laboro.ai/activity/column/engineer/eg-laboro-tv-corpus-jp/) (22M tokens), which can be used for free for academic purposes (application necessary).
