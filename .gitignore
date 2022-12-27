@@ -10,3 +10,10 @@ TODO
 TODO/
 /zz-*/
 /00-*/
+
+# jtubespeech & tubelex output
+/jtubespeech
+/tubelex-ja-channels.tsv
+/*.xz
+/*.zip
+

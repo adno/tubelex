@@ -1,17 +1,12 @@
-# Requires fasttext, tqdm, fugashi, unidic, unidic-lite, sklearn
 import re
 import os
 import sys
-from enum import Enum
 from collections.abc import Iterator, Iterable, Callable
-from typing import Optional, Union, NamedTuple
-from collections import defaultdict, Counter
+from typing import Optional
+from collections import Counter
 from urllib.request import urlretrieve
 from contextlib import contextmanager
-from zipfile import ZipFile, ZIP_DEFLATED, ZIP_BZIP2, ZIP_LZMA
-import gzip
-import bz2
-import lzma
+from zipfile import ZipFile
 from itertools import chain, groupby
 import argparse
 from tqdm import tqdm  # type: ignore
@@ -20,9 +15,9 @@ import pandas as pd  # type: ignore
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
-from ja_utils import get_re_word, WAVE_DASH, tagger_from_args, \
+from ja_utils import get_re_word, WAVE_DASH, add_tagger_arg_group, tagger_from_args, \
     NORMALIZE_FULLWIDTH_TILDE
-from unicodedata import normalize as unicode_normalize
+from freq_utils import Storage, WordCounterGroup
 # We use the smaller model from
 # https://fasttext.cc/docs/en/language-identification.html
 FT_LID_MODEL_PATH = 'lid.176.ftz'
@@ -42,69 +37,10 @@ CLEAN_PATH = 'clean-ja'
 UNIQUE_PATH = 'unique-ja'
 DEFAULT_FREQ_PATH = 'tubelex-ja%.tsv'    # See CLI arguments
 DEFAULT_CHANNEL_STATS_PATH = 'tubelex-ja-channels.tsv'  # See CLI arguments
-DEFAULT_MIN_VIDEOS = 3                    # See CLI arguments
-DEFAULT_MIN_CHANNELS = 3                # See CLI arguments
+DEFAULT_MIN_VIDEOS = 3                      # See CLI arguments
+DEFAULT_MIN_CHANNELS = 0                    # See CLI arguments
 LINEAR_KERNEL_CHUNK_SIZE = 10000
-NORMALIZED_SUFFIX_FNS = (
-    (False, '', None),
-    (True, '-lower', lambda w: w.lower()),
-    (True, '-nfkc', lambda w: unicode_normalize('NFKC', w)),
-    (True, '-nfkc-lower', lambda w: unicode_normalize('NFKC', w).lower())
-    )
-
-
 Tokenizer = Callable[[str], list[str]]
-
-
-class TubeCounter(NamedTuple):
-    word_count: Counter[str]
-    word_videos: dict[str, set[int]]
-    word_channels: dict[str, set[Union[int, str]]]
-
-    @staticmethod
-    def new() -> 'TubeCounter':
-        return TubeCounter(
-            word_count=Counter(),
-            word_videos=defaultdict(set),
-            word_channels=defaultdict(set)
-            )
-
-    def add(self, words: Iterable[str], video_no: int, channel_id: Union[int, str]):
-        word_count = self.word_count
-        word_videos = self.word_videos
-        word_channels = self.word_channels
-        for w in words:
-            word_count[w] += 1
-            word_videos[w].add(video_no)
-            word_channels[w].add(channel_id)
-
-    def remove_less_than_min_videos(self, min_videos: int):
-        word_count = self.word_count
-        word_videos = self.word_videos
-        for word, videos in word_videos.items():
-            if len(videos) < min_videos:
-                del word_count[word]
-
-
-class Storage(Enum):
-    PLAIN = (None, open, '')
-    DEFLATE = (ZIP_DEFLATED, gzip.open, '.gz')
-    BZIP2 = (ZIP_BZIP2, bz2.open, '.bz2')
-    LZMA = (ZIP_LZMA, lzma.open, '.xz')
-
-    def __init__(self, zip_compression, open_fn, suffix):
-        self.zip_compression    = zip_compression
-        self.open               = open_fn
-        self.suffix             = suffix
-
-    @staticmethod
-    def from_args(args: argparse.Namespace) -> 'Storage':
-        return (
-            Storage.DEFLATE if args.deflate else
-            Storage.BZIP2 if args.bzip2 else
-            Storage.LZMA if args.lzma else
-            Storage.PLAIN
-            )
 
 
 def linear_kernel_piecewise(x, max_size=LINEAR_KERNEL_CHUNK_SIZE, wrapper=None):
@@ -119,20 +55,6 @@ def linear_kernel_piecewise(x, max_size=LINEAR_KERNEL_CHUNK_SIZE, wrapper=None):
 def parse() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description='Process subtitles from jtubespeech and compute word frequencies'
-        )
-
-    arch_group = parser.add_mutually_exclusive_group()
-    arch_group.add_argument(
-        '--deflate', '--zip', '-z', action='store_true',
-        help='Store data deflated (.zip/.gz)'
-        )
-    arch_group.add_argument(
-        '--bzip2', '-j', action='store_true',
-        help='Store data using Bzip2 (.zip/.bz2)'
-        )
-    arch_group.add_argument(
-        '--lzma', '--xz', '-x', action='store_true',
-        help='Store data using LZMA (.zip/.xz)'
         )
 
     parser.add_argument(
@@ -161,9 +83,12 @@ def parse() -> argparse.Namespace:
         help='Minimum videos for the word to be counted'
         )
     parser.add_argument(
-        '--min-channels', type=int, default=DEFAULT_MIN_VIDEOS,
+        '--min-channels', type=int, default=DEFAULT_MIN_CHANNELS,
         help='Minimum channels for the word to be counted'
         )
+
+    Storage.add_arg_group(parser, 'Compression options', zip_suffix=True)
+
     parser.add_argument(
         '--output', '-o', type=str, default=None,
         help=(
@@ -176,21 +101,14 @@ def parse() -> argparse.Namespace:
         '--channel-stats', type=str, default=None,
         help='Output filename for channel stats (computed together with frequencies)'
         )
-    dic_group = parser.add_mutually_exclusive_group()
-    dic_group.add_argument(
-        '--dicdir', type=str, default=None,
-        help='Dictionary directory for fugashi/MeCab.'
-        )
-    dic_group.add_argument(
-        '--dictionary', '-D', choices=('unidic', 'unidic-lite'), default=None,
-        help='Dictionary (installed as a Python package) for fugashi/MeCab.'
-        )
+
+    add_tagger_arg_group(parser)
 
     return parser.parse_args()
 
 
 @contextmanager
-def get_write_file(path: str, storage: Storage):
+def get_write_file(path: str, storage: Storage) -> Iterator[Callable[[str, str], None]]:
     try:
         write_file: Callable[[str, str], None]
         if storage.zip_compression is not None:
@@ -245,7 +163,7 @@ ENTITY2STR = {'lt': '<', 'gt': '>', 'nbsp': ' ', 'amp': '&', 'lrm': ''}
 RE_ENTITY  = re.compile(r'&(%s);' % '|'.join(ENTITY2STR))
 
 
-def repl_entities(m):
+def repl_entities(m: re.Match) -> str:
     return ENTITY2STR[m.group(1)]
 
 
@@ -348,7 +266,7 @@ class SubCleaner:
         self.n_chars_j      = n_chars_j
 
     @property
-    def japanese_char_frequency_in_filtered_lines(self):
+    def japanese_char_frequency_in_filtered_lines(self) -> float:
         n = self.n_chars
         return (self.n_chars_j / n) if n else 0
 
@@ -632,20 +550,9 @@ def do_frequencies(
         f.write(f'NO_CHANNEL_ID\t{n_no_channel}\n')
 
     freq_path: str  = path or (DEFAULT_FREQ_PATH + storage.suffix)
-    do_norm         = '%' in freq_path
+    normalize       = '%' in freq_path
 
-#     word_count: Counter[str] = Counter()
-#     word_videos: dict[str, set[int]] = defaultdict(set)
-#     word_channels: dict[str, set[Union[int, str]]] = defaultdict(set)
-
-    NORMALIZED_SUFFIX_FNS
-
-    counters: dict[str, TubeCounter] = {
-        suffix: TubeCounter.new() for normalized, suffix, __ in NORMALIZED_SUFFIX_FNS
-        if do_norm or not normalized
-        }
-
-    n_words = 0
+    counters = WordCounterGroup(normalize=normalize, channels=True)
 
     with get_files_contents(UNIQUE_PATH, storage) as files_contents:
         files, iter_contents = files_contents
@@ -656,51 +563,28 @@ def do_frequencies(
             total=n_videos
             ):
             video_id = file.removesuffix(DATA_SUFFIX)
+
             # Videos without a channel id are counted as unique 1-video channels:
             channel_id = channel_ids.loc[video_id] or video_no
+
             # Normalize tilde: always AND before tokenization:
             text = text.translate(NORMALIZE_FULLWIDTH_TILDE)
             words = tokenize(text)
 
-            for __, suffix, norm_fn in NORMALIZED_SUFFIX_FNS:
-                c = counters.get(suffix)
-                if c is not None:
-                    c.add(
-                        map(norm_fn, words) if (norm_fn is not None) else words,
-                        video_no=video_no,
-                        channel_id=channel_id
-                        )
-            n_words += len(words)  # count before removing low-freq words
+            counters.add(words, doc_no=video_no, channel_id=channel_id)
 
-        for c in counters.values():
-            c.remove_less_than_min_videos(min_videos)
+    if min_videos:
+        counters.remove_less_than_min_docs(min_videos)
+    if min_channels:
+        counters.remove_less_than_min_channels(min_channels)
 
-    line_format = '%s\t%d\t%d\t%d\n'
-
-    for suffix, c in counters.items():
-        with storage.open(
-            freq_path.replace('%', suffix),  # no effect if not do_norm (no '%')
-            'wt'
-            ) as f:
-
-            w_count     = c.word_count
-            w_videos    = c.word_videos
-            w_channels  = c.word_channels
-
-            words = sorted(w_count, key=w_count.__getitem__, reverse=True)
-
-            f.write('word\tcount\tvideos\tchannels\n')
-            for word in words:
-                wc = w_count[word]
-                f.write(
-                    line_format % (
-                        word, wc, len(w_videos[word]), len(w_channels[word])
-                        )
-                    )
-
-            f.write(
-                line_format % ('[TOTAL]', n_words, n_videos, n_channels_and_no_channels)
-                )
+    counters.dump(
+        freq_path,
+        storage,
+        cols=('word', 'count', 'videos', 'channels'),
+        n_docs=n_videos,
+        n_channels=n_channels_and_no_channels
+        )
 
 
 def main() -> None:
@@ -722,30 +606,24 @@ def main() -> None:
         tagger_parse = tagger_from_args(args).parse
 
         def tokenize(s: str) -> list[str]:
-            # TfidfVectorizer requires a list of strings:
-            return [word for word in tagger_parse(s).split(' ') if RE_WORD.match(word)]
+            return list(filter(RE_WORD.match, tagger_parse(s).split(' ')))
 
         if unique:
-            nmin: int = args.nmin
-            nmax: int = args.nmax
             do_unique(
                 storage,
                 tokenize=tokenize,
                 limit=limit,
-                ngram_range=(nmin, nmax)
+                ngram_range=(args.nmin, args.nmax)
                 )
         if frequencies:
-            min_videos: int     = args.min_videos
-            min_channels: int   = args.min_channels
-
             do_frequencies(
                 storage,
                 tokenize=tokenize,
                 limit=limit,
                 path=args.output,
                 channel_stats_path=args.channel_stats,
-                min_videos=min_videos,
-                min_channels=min_channels
+                min_videos=args.min_videos,
+                min_channels=args.min_channels
                 )
 
 
