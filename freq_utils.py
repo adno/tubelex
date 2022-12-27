@@ -254,7 +254,7 @@ class WordCounter:
         f: TextIO,
         cols: Sequence[str],
         totals: Sequence[int],
-        sep: str='\t'
+        sep: str = '\t'
         ):
         '''
         >>> d = WordCounter()
