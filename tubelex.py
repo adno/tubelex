@@ -571,7 +571,8 @@ def do_frequencies(
             text = text.translate(NORMALIZE_FULLWIDTH_TILDE)
             words = tokenize(text)
 
-            counters.add(words, doc_no=video_no, channel_id=channel_id)
+            counters.add(words, channel_id)
+            counters.close_doc()
 
     if min_videos:
         counters.remove_less_than_min_docs(min_videos)
