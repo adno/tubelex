@@ -586,6 +586,8 @@ def do_frequencies(
         n_channels=n_channels_and_no_channels
         )
 
+    counters.warnings_for_markup()
+
 
 def main() -> None:
     args = parse()
