@@ -132,3 +132,5 @@ The word list contains only the surface forms of the words (segments). For many 
 We have yet to attempt to analyze the corpus/word list, or compare it with word lists based on smaller but more carefully curated corpora of spoken Japanese. The largest corpus of such kind would be [CSJ](https://clrd.ninjal.ac.jp/csj/index.html) (7M tokens, with publicly available [word lists](https://clrd.ninjal.ac.jp/csj/chunagon.html#data)). Smaller corpora include [CEJC](https://www2.ninjal.ac.jp/conversation/corpus.html), [NUCC](https://mmsrv.ninjal.ac.jp/nucc/), [J-TOCC](http://nakamata.info/database/), and [BTSJ](https://ninjal-usamilab.info/btsj_corpus/).
 
 Note that there is also a large corpus based on TV subtitles [LaboroTVSpeech](https://laboro.ai/activity/column/engineer/eg-laboro-tv-corpus-jp/) (22M tokens), which can be used for free for academic purposes (application necessary).
+
+You may also like [wikipedia-word-frequency-clean](https://github.com/adno/wikipedia-word-frequency-clean), a repository of word frequency lists for multiple languages from cleaned-up Wikipedia dumps, which are processed in a similar way to TUBELEX-JA and also include Japanese.
