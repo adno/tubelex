@@ -138,7 +138,7 @@ RE_JAPANESE_1C = (
     r'\u30A0-\u30FF'    # Katakana (full-width)
     r'\u3400-\u4DB5\u4E00-\u9FCB\uF900-\uFA6A'  # {Han} (Kanji incl. Chinese-only)
     r'\u2E80-\u2FD5'    # Kanji radicals
-    r'\uFF5F-\uFF9F'    # HW Katakana and pucntutation
+    r'\uFF5F-\uFF9F'    # HW Katakana and punctutation
     r'\u3000-\u303F'    # Japanese Symbols and Punctuation
     r'\u31F0-\u31FF\u3220-\u3243\u3280-\u337F'  # Misc. Japanese Symbols and Characters
     r'\uFF01-\uFF5E]'   # FW Alphanumeric and Punctuation (basically FW ASCII)
