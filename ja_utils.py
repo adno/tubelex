@@ -98,12 +98,13 @@ NORMALIZE_FULLWIDTH_TILDE: dict[int, int] = {
     }
 
 
-def fugashi_tagger(dicdir: Optional[str]) -> fugashi.GenericTagger:
+def fugashi_tagger(dicdir: Optional[str], wakati: bool = True) -> fugashi.GenericTagger:
+    outfmt = '-O wakati' if wakati else False
     if dicdir is None:
-        return fugashi.Tagger('-O wakati')  # -d/-r supplied automatically
+        return fugashi.Tagger(outfmt)  # -d/-r supplied automatically
     # GenericTagger: we do not supply wrapper (not needed wor -O wakati)
     mecabrc = os.path.join(dicdir, 'mecabrc')
-    return fugashi.GenericTagger(f'-O wakati -d {dicdir} -r {mecabrc}')
+    return fugashi.GenericTagger(f'{outfmt} -d {dicdir} -r {mecabrc}')
 
 
 def add_tagger_arg_group(
@@ -122,7 +123,10 @@ def add_tagger_arg_group(
         )
 
 
-def tagger_from_args(args: argparse.Namespace) -> fugashi.GenericTagger:
+def tagger_from_args(
+    args: argparse.Namespace,
+    wakati: bool = True
+    ) -> fugashi.GenericTagger:
     # We always specify dicdir EXPLICITLY
     if args.dicdir is not None:
         dicdir = args.dicdir
@@ -134,4 +138,4 @@ def tagger_from_args(args: argparse.Namespace) -> fugashi.GenericTagger:
             assert args.dictionary is None or args.dictionary == 'unidic-lite'
             import unidic_lite  # type: ignore
             dicdir = unidic_lite.DICDIR
-    return fugashi_tagger(dicdir)
+    return fugashi_tagger(dicdir, wakati=wakati)

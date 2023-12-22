@@ -132,17 +132,19 @@ class WordCounter:
     >>> p == m
     True
     '''
-    __slots__ = ('word_count', 'word_docn', 'word_channels', 'doc_words')
+    __slots__ = ('word_count', 'word_docn', 'word_channels', 'word_pos', 'doc_words')
     word_count: Counter[str]
     word_docn: Counter[str]                                     # documents or videos
     word_channels: Optional[dict[str, set[Union[int, str]]]]    # for tubelex (YouTube)
+    word_pos: Optional[dict[str, Counter[str]]]      # optional, for tubelex (YouTube)
     doc_words: set[str]                                         # words in current doc
 
-    def __init__(self, channels: bool = False):
+    def __init__(self, channels: bool = False, pos: bool = False):
         super().__init__()
         self.word_count     = Counter()
         self.word_docn      = Counter()
         self.word_channels  = defaultdict(set) if channels else None
+        self.word_pos       = defaultdict(Counter) if pos else None
         self.doc_words      = set()
 
     def __eq__(self, other):
@@ -150,6 +152,7 @@ class WordCounter:
             self.word_count == other.word_count and
             self.word_docn == other.word_docn and
             self.word_channels == other.word_channels and
+            self.word_pos == other.word_pos and
             self.doc_words == self.doc_words
             )
 
@@ -163,6 +166,21 @@ class WordCounter:
             )
         for w in words:
             self.word_count[w] += 1
+            self.doc_words.add(w)
+            if self.word_channels is not None:
+                self.word_channels[w].add(channel_id)  # type: ignore
+
+    def add_pos(
+        self,
+        words_pos: Iterable[tuple[str, str]],
+        channel_id: Optional[Union[int, str]] = None
+        ):
+        assert (channel_id is None) == (self.word_channels is None), (
+            channel_id, self.word_channels
+            )
+        for w, p in words_pos:
+            self.word_count[w] += 1
+            self.word_pos[w][p] += 1
             self.doc_words.add(w)
             if self.word_channels is not None:
                 self.word_channels[w].add(channel_id)  # type: ignore
@@ -200,6 +218,8 @@ class WordCounter:
     def merge(self, other: 'WordCounter') -> 'WordCounter':
         assert not self.doc_words, 'Missing `self.close_doc()`?'
         assert not other.doc_words, 'Missing `other.close_doc()`?'
+        assert self.word_pos is None, 'Merge does not support POS (self).'
+        assert other.word_pos is None, 'Merge does not support POS (other).'
 
         self.word_count.update(other.word_count)
 
@@ -254,28 +274,51 @@ class WordCounter:
         w_count     = self.word_count
         w_docn      = self.word_docn
         w_channels  = self.word_channels
+        w_pos       = self.word_pos
         n_numbers   = 2 if w_channels is None else 3
-        assert len(cols) == 1 + len(totals), (cols, totals)  # 1 is for TOTAL_LABEL
+        n_cols      = 1 + n_numbers         # 1 is for word/TOTAL_LABEL
+        if w_pos is not None:
+            n_cols += 1
+        assert len(cols) == n_cols, (cols, totals)
         assert len(totals) == n_numbers, (totals, n_numbers)
 
-        line_format = '%s' + (f'{sep}%d' * n_numbers) + '\n'
+        line_format = (
+            '%s' + (f'{sep}%d' * n_numbers) +
+            (f'{sep}%s' if (w_pos is not None) else '') +
+            '\n'
+            )
 
         words = sorted(w_count, key=w_count.__getitem__, reverse=True)
 
         f.write(sep.join(cols) + '\n')
-        if w_channels is None:
-            for word in words:
-                f.write(line_format % (
-                        word,  w_count[word], w_docn[word]
-                        ))
+        if w_pos is not None:
+            if w_channels is None:
+                for word in words:
+                    f.write(line_format % (
+                            word,  w_count[word], w_docn[word],
+                            w_pos[word].most_common(1)[0]
+                            ))
+            else:
+                for word in words:
+                    f.write(line_format % (
+                            word,  w_count[word], w_docn[word],
+                            w_pos[word].most_common(1)[0],
+                            len(w_channels[word])
+                            ))
         else:
-            for word in words:
-                f.write(line_format % (
-                        word,  w_count[word], w_docn[word], len(w_channels[word])
-                        ))
+            if w_channels is None:
+                for word in words:
+                    f.write(line_format % (
+                            word,  w_count[word], w_docn[word]
+                            ))
+            else:
+                for word in words:
+                    f.write(line_format % (
+                            word,  w_count[word], w_docn[word], len(w_channels[word])
+                            ))
 
         f.write(line_format % (
-            TOTAL_LABEL, *totals
+            TOTAL_LABEL, *totals, *(('',) if (w_pos is not None) else ())
             ))
 
 
@@ -284,9 +327,9 @@ class WordCounterGroup(dict[str, WordCounter]):
     n_words: int
     n_docs: int
 
-    def __init__(self, normalize: bool, channels: bool = False):
+    def __init__(self, normalize: bool, channels: bool = False, pos: bool = False):
         super().__init__((
-            (suffix, WordCounter(channels=channels))
+            (suffix, WordCounter(channels=channels, pos=pos))
             for normalized, suffix, __ in NORMALIZED_SUFFIX_FNS
             if normalize or not normalized
             ))
@@ -306,6 +349,21 @@ class WordCounterGroup(dict[str, WordCounter]):
                     channel_id=channel_id
                     )
         self.n_words += len(words)
+
+    def add_pos(
+        self,
+        words_pos: Sequence[tuple[str, str]],
+        channel_id: Optional[Union[int, str]] = None
+        ):
+        for __, suffix, norm_fn in NORMALIZED_SUFFIX_FNS:
+            c = self.get(suffix)
+            if c is not None:
+                c.add(
+                    map(lambda wp: (norm_fn[wp[0]], wp[1]), words_pos)
+                    if (norm_fn is not None) else words_pos,
+                    channel_id=channel_id
+                    )
+        self.n_words += len(words_pos)
 
     def close_doc(self):
         for c in self.values():

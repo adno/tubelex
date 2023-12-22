@@ -41,6 +41,7 @@ DEFAULT_MIN_VIDEOS = 3                      # See CLI arguments
 DEFAULT_MIN_CHANNELS = 0                    # See CLI arguments
 LINEAR_KERNEL_CHUNK_SIZE = 10000
 Tokenizer = Callable[[str], list[str]]
+POSTagger = Callable[[str], list[tuple[str, str]]]
 
 
 def linear_kernel_piecewise(x, max_size=LINEAR_KERNEL_CHUNK_SIZE, wrapper=None):
@@ -71,6 +72,10 @@ def parse() -> argparse.Namespace:
     parser.add_argument(
         '--frequencies', '-f', action='store_true',
         help='Compute frequencies'
+        )
+    parser.add_argument(
+        '--pos', action='store_true',
+        help='Add most common POS to frequencies'
         )
 
     parser.add_argument(
@@ -520,12 +525,15 @@ def do_unique(
 def do_frequencies(
     storage: Storage,
     limit: Optional[int],
-    tokenize: Tokenizer,
+    tokenize: Optional[Tokenizer],
+    pos_tag: Optional[POSTagger],
     path: Optional[str],
     channel_stats_path: Optional[str],
     min_videos: int,
     min_channels: int
     ) -> None:
+
+    assert (tokenize is not None) != (pos_tag is not None), (tokenize, pos_tag)
 
     all_subtitles = pd.read_csv(
         SUBLIST_PATH,
@@ -552,7 +560,9 @@ def do_frequencies(
     freq_path: str  = path or (DEFAULT_FREQ_PATH + storage.suffix)
     normalize       = '%' in freq_path
 
-    counters = WordCounterGroup(normalize=normalize, channels=True)
+    counters = WordCounterGroup(
+        normalize=normalize, channels=True, pos_tag=(pos_tag is not None)
+        )
 
     with get_files_contents(UNIQUE_PATH, storage) as files_contents:
         files, iter_contents = files_contents
@@ -569,9 +579,13 @@ def do_frequencies(
 
             # Normalize tilde: always AND before tokenization:
             text = text.translate(NORMALIZE_FULLWIDTH_TILDE)
-            words = tokenize(text)
+            if tokenize is not None:
+                words = tokenize(text)
+                counters.add(words, channel_id)
+            else:
+                words_pos = tokenize(text)
+                counters.add_pos(words_pos, channel_id)
 
-            counters.add(words, channel_id)
             counters.close_doc()
 
     if min_videos:
@@ -579,10 +593,13 @@ def do_frequencies(
     if min_channels:
         counters.remove_less_than_min_channels(min_channels)
 
+    cols = ['word', 'count', 'videos', 'channels']
+    if pos_tag is not None:
+        cols.append('pos')
     counters.dump(
         freq_path,
         storage,
-        cols=('word', 'count', 'videos', 'channels'),
+        cols=cols,
         n_docs=n_videos,
         n_channels=n_channels_and_no_channels
         )
@@ -597,6 +614,7 @@ def main() -> None:
     clean = args.clean
     unique = args.unique
     frequencies = args.frequencies
+    with_pos = args.pos
     if not (clean or unique or frequencies):
         clean = True
         unique = True
@@ -606,10 +624,25 @@ def main() -> None:
         do_clean(storage, limit=limit)
 
     if unique or frequencies:
-        tagger_parse = tagger_from_args(args).parse
+        wakati_parse = tagger_from_args(args).parse
 
         def tokenize(s: str) -> list[str]:
-            return list(filter(RE_WORD.match, tagger_parse(s).split(' ')))
+            return list(filter(RE_WORD.match, wakati_parse(s).split(' ')))
+
+        if frequencies and with_pos:
+            tagger_parse = tagger_from_args(args, wakati=False).parse
+
+            def iter_pos_tag(s: str) -> Iterator[tuple[str, str]]:
+                lines = tagger_parse(s).split('\n')
+                for line in lines:
+                    if line == 'EOS':
+                        continue
+                    token, _, _, _, pos, _ = line.split('\t', maxsplit=5)
+                    if RE_WORD.match(token):
+                        yield (token, pos)
+
+            def pos_tag(s: str) -> list[tuple[str, str]]:
+                return list(iter_pos_tag(s))
 
         if unique:
             do_unique(
@@ -621,7 +654,8 @@ def main() -> None:
         if frequencies:
             do_frequencies(
                 storage,
-                tokenize=tokenize,
+                tokenize=(tokenize if not with_pos else None),
+                pos_tag=(pos_tag if with_pos else None),
                 limit=limit,
                 path=args.output,
                 channel_stats_path=args.channel_stats,
