@@ -561,7 +561,7 @@ def do_frequencies(
     normalize       = '%' in freq_path
 
     counters = WordCounterGroup(
-        normalize=normalize, channels=True, pos_tag=(pos_tag is not None)
+        normalize=normalize, channels=True, pos=(pos_tag is not None)
         )
 
     with get_files_contents(UNIQUE_PATH, storage) as files_contents:
@@ -583,7 +583,7 @@ def do_frequencies(
                 words = tokenize(text)
                 counters.add(words, channel_id)
             else:
-                words_pos = tokenize(text)
+                words_pos = pos_tag(text)
                 counters.add_pos(words_pos, channel_id)
 
             counters.close_doc()

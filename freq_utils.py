@@ -359,7 +359,7 @@ class WordCounterGroup(dict[str, WordCounter]):
             c = self.get(suffix)
             if c is not None:
                 c.add(
-                    map(lambda wp: (norm_fn[wp[0]], wp[1]), words_pos)
+                    map(lambda wp: (norm_fn(wp[0]), wp[1]), words_pos)
                     if (norm_fn is not None) else words_pos,
                     channel_id=channel_id
                     )
