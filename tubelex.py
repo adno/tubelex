@@ -77,6 +77,10 @@ def parse() -> argparse.Namespace:
         '--pos', action='store_true',
         help='Add most common POS to frequencies'
         )
+    parser.add_argument(
+        '--lemmatize', action='store_true',
+        help='Lemmatize all words'
+        )
 
     parser.add_argument(
         '--limit', type=int, default=None,
@@ -607,6 +611,22 @@ def do_frequencies(
     counters.warnings_for_markup()
 
 
+SAHEN_NOUN_POS = '名詞-普通名詞-サ変可能'
+SAHEN_VERB_POS = '動詞-非自立可能'
+SAHEN_VERB_LEMMAS = {
+    '為る',
+    '出来る'
+    '致す',
+    '為さる',
+    '頂く',
+    '下さる'
+    }
+MECAB_TOKEN = 0
+MECAB_LEMMA = 3
+MECAB_POS = 4
+MECAB_MAX = 5
+
+
 def main() -> None:
     args = parse()
     storage = Storage.from_args(args)
@@ -615,6 +635,7 @@ def main() -> None:
     unique = args.unique
     frequencies = args.frequencies
     with_pos = args.pos
+
     if not (clean or unique or frequencies):
         clean = True
         unique = True
@@ -632,14 +653,32 @@ def main() -> None:
         if frequencies and with_pos:
             tagger_parse = tagger_from_args(args, wakati=False).parse
 
+            ret_index = MECAB_LEMMA if args.lemmatize else MECAB_TOKEN
+#             def iter_pos_tag_sahen(s: str) -> Iterator[tuple[str, str]]:
+#                 prev_pos = None
+#                 lines = tagger_parse(s).split('\n')
+#                 for line in lines:
+#                     if line == 'EOS':
+#                         prev_pos = None
+#                         continue
+#                     fields = line.split('\t', maxsplit=MECAB_MAX)
+#                     token, _, _, lemma, pos, _ = fields
+#                     if RE_WORD.match(token):
+#                         yield (fields[ret_index],
+#                                pos, ((prev_pos == SAHEN_NOUN_POS) and
+#                                      (pos == SAHEN_VERB_POS) and
+#                                      (lemma in SAHEN_VERB_LEMMAS)))
+#                     prev_pos = pos
+
             def iter_pos_tag(s: str) -> Iterator[tuple[str, str]]:
                 lines = tagger_parse(s).split('\n')
                 for line in lines:
                     if line == 'EOS':
                         continue
-                    token, _, _, _, pos, _ = line.split('\t', maxsplit=5)
+                    fields = line.split('\t', maxsplit=MECAB_MAX)
+                    token, _, _, lemma, pos, _ = fields
                     if RE_WORD.match(token):
-                        yield (token, pos)
+                        yield (fields[ret_index], pos)
 
             def pos_tag(s: str) -> list[tuple[str, str]]:
                 return list(iter_pos_tag(s))
