@@ -296,14 +296,14 @@ class WordCounter:
                 for word in words:
                     f.write(line_format % (
                             word,  w_count[word], w_docn[word],
-                            w_pos[word].most_common(1)[0]
+                            w_pos[word].most_common(1)[0][0]
                             ))
             else:
                 for word in words:
                     f.write(line_format % (
                             word,  w_count[word], w_docn[word],
-                            w_pos[word].most_common(1)[0],
-                            len(w_channels[word])
+                            len(w_channels[word]),
+                            w_pos[word].most_common(1)[0][0]
                             ))
         else:
             if w_channels is None:
@@ -358,7 +358,7 @@ class WordCounterGroup(dict[str, WordCounter]):
         for __, suffix, norm_fn in NORMALIZED_SUFFIX_FNS:
             c = self.get(suffix)
             if c is not None:
-                c.add(
+                c.add_pos(
                     map(lambda wp: (norm_fn(wp[0]), wp[1]), words_pos)
                     if (norm_fn is not None) else words_pos,
                     channel_id=channel_id
