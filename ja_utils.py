@@ -98,13 +98,24 @@ NORMALIZE_FULLWIDTH_TILDE: dict[int, int] = {
     }
 
 
-def fugashi_tagger(dicdir: Optional[str], wakati: bool = True) -> fugashi.GenericTagger:
-    outfmt = '-O wakati' if wakati else False
+OPT_WAKATI = '-O wakati'
+OPT_UNIDIC = '-O unidic'
+OPT_BASE_LEMMA_POS = (
+    r'-O "" '
+    r'-F "%m\\t%f[10]\\t%f[7]\\t%F-[0,1,2,3]\\n" '  # surface, "orthBase", "lemma", POS
+    r'-U "%m\\t%m\\t%m\\t%F-[0,1,2,3]\n"' # "orthBase", "lemma" N/A for UNK
+    )
+
+
+def fugashi_tagger(
+    dicdir: Optional[str],
+    option: str = OPT_WAKATI
+    ) -> fugashi.GenericTagger:
     if dicdir is None:
-        return fugashi.Tagger(outfmt)  # -d/-r supplied automatically
-    # GenericTagger: we do not supply wrapper (not needed wor -O wakati)
+        return fugashi.Tagger(option)  # -d/-r supplied automatically
+    # GenericTagger: we do not supply wrapper (not needed for -O wakati)
     mecabrc = os.path.join(dicdir, 'mecabrc')
-    return fugashi.GenericTagger(f'{outfmt} -d {dicdir} -r {mecabrc}')
+    return fugashi.GenericTagger(f'{option} -d {dicdir} -r {mecabrc}')
 
 
 def add_tagger_arg_group(
@@ -125,8 +136,9 @@ def add_tagger_arg_group(
 
 def tagger_from_args(
     args: argparse.Namespace,
-    wakati: bool = True
+    option: str = OPT_WAKATI
     ) -> fugashi.GenericTagger:
+
     # We always specify dicdir EXPLICITLY
     if args.dicdir is not None:
         dicdir = args.dicdir
@@ -138,4 +150,4 @@ def tagger_from_args(
             assert args.dictionary is None or args.dictionary == 'unidic-lite'
             import unidic_lite  # type: ignore
             dicdir = unidic_lite.DICDIR
-    return fugashi_tagger(dicdir, wakati=wakati)
+    return fugashi_tagger(dicdir, option)

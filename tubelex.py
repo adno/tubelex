@@ -16,7 +16,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
 from ja_utils import get_re_word, WAVE_DASH, add_tagger_arg_group, tagger_from_args, \
-    NORMALIZE_FULLWIDTH_TILDE
+    NORMALIZE_FULLWIDTH_TILDE, OPT_BASE_LEMMA_POS
+
 from freq_utils import Storage, WordCounterGroup
 # We use the smaller model from
 # https://fasttext.cc/docs/en/language-identification.html
@@ -78,10 +79,12 @@ def parse() -> argparse.Namespace:
         help='Add most common POS to frequencies'
         )
     parser.add_argument(
-        '--lemmatize', action='store_true',
-        help='Lemmatize all words'
+        '--form', choices=['surface', 'base', 'lemma'], default='surface',
+        help=(
+            'Recorded word form: surface, base form, or lemma '
+            '(base form in standard orthography). Affects --unique and --frequency.'
+            )
         )
-
     parser.add_argument(
         '--limit', type=int, default=None,
         help='Maximum number of videos to process (for testing purposes)'
@@ -101,7 +104,7 @@ def parse() -> argparse.Namespace:
     parser.add_argument(
         '--output', '-o', type=str, default=None,
         help=(
-            'Output filename for frequencies. If the placeholder "%" is present, it '
+            'Output filename for frequencies. If the placeholder "%%" is present, it '
             'is replaced with a string identifying the normalization. Otherwise, '
             'output only unnormalized data.'
             )
@@ -571,6 +574,7 @@ def do_frequencies(
     with get_files_contents(UNIQUE_PATH, storage) as files_contents:
         files, iter_contents = files_contents
         n_videos = len(files[:limit])
+        assert n_videos, 'Something went wrong, no subtitles found.'
         for video_no, (file, text) in tqdm(
             desc='Computing frequencies',
             iterable=enumerate(zip(files[:limit], iter_contents(limit))),
@@ -621,10 +625,6 @@ SAHEN_VERB_LEMMAS = {
     '頂く',
     '下さる'
     }
-MECAB_TOKEN = 0
-MECAB_LEMMA = 3
-MECAB_POS = 4
-MECAB_MAX = 5
 
 
 def main() -> None:
@@ -635,6 +635,7 @@ def main() -> None:
     unique = args.unique
     frequencies = args.frequencies
     with_pos = args.pos
+    form = args.form
 
     if not (clean or unique or frequencies):
         clean = True
@@ -645,15 +646,10 @@ def main() -> None:
         do_clean(storage, limit=limit)
 
     if unique or frequencies:
-        wakati_parse = tagger_from_args(args).parse
+        if frequencies and with_pos or form != 'surface':
+            ret_index = ['surface', 'base', 'lemma'].index(form)
+            tagger_parse = tagger_from_args(args, OPT_BASE_LEMMA_POS).parse
 
-        def tokenize(s: str) -> list[str]:
-            return list(filter(RE_WORD.match, wakati_parse(s).split(' ')))
-
-        if frequencies and with_pos:
-            tagger_parse = tagger_from_args(args, wakati=False).parse
-
-            ret_index = MECAB_LEMMA if args.lemmatize else MECAB_TOKEN
 #             def iter_pos_tag_sahen(s: str) -> Iterator[tuple[str, str]]:
 #                 prev_pos = None
 #                 lines = tagger_parse(s).split('\n')
@@ -675,13 +671,20 @@ def main() -> None:
                 for line in lines:
                     if line == 'EOS':
                         continue
-                    fields = line.split('\t', maxsplit=MECAB_MAX)
-                    token, _, _, lemma, pos, _ = fields
+                    fields = line.split('\t')
+                    token, _, _, pos = fields
                     if RE_WORD.match(token):
                         yield (fields[ret_index], pos)
 
             def pos_tag(s: str) -> list[tuple[str, str]]:
                 return list(iter_pos_tag(s))
+
+            def tokenize(s: str) -> list[str]:
+                return list(map(lambda token_pos: token_pos[0], iter_pos_tag(s)))
+        else:
+            wakati_parse = tagger_from_args(args).parse
+            def tokenize(s: str) -> list[str]:
+                return list(filter(RE_WORD.match, wakati_parse(s).split(' ')))
 
         if unique:
             do_unique(
