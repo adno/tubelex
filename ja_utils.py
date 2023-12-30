@@ -130,7 +130,10 @@ def add_tagger_arg_group(
         )
     dic_group.add_argument(
         '--dictionary', '-D', choices=('unidic', 'unidic-lite'), default=None,
-        help='Dictionary (installed as a Python package) for fugashi/MeCab.'
+        help=(
+            'Dictionary (installed as a Python package) for fugashi/MeCab.'
+            'Default: unidic-lite.'
+            )
         )
 
 
