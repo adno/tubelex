@@ -20,8 +20,9 @@ from ja_utils import (
     NORMALIZE_FULLWIDTH_TILDE, OPT_BASE_LEMMA_READING_POS
     )
 from extended_pos import (
-    X_PARTICLE_POS, X_VERB_POS, X_AUX_POS,
-    VV_POS, VV_READING_SET, PAT_PARTICLE_AUX, AUX_GROUP, aux2base
+    X_PARTICLE_POS, X_VERB_POS, X_AUX_POS, X_MIMETIC_POS,
+    VV_POS, VV_READING_SET, PAT_PARTICLE_AUX, AUX_GROUP, aux2base,
+    MIMETIC_POS, MIMETIC_SET
     )
 
 from freq_utils import Storage, WordCounterGroup
@@ -86,7 +87,7 @@ def parse() -> argparse.Namespace:
         )
     parser.add_argument(
         '--extended-pos', '-X', action='store_true',
-        help='Tag compound verbs (XV), compound particles (XP), auxiliaries (XA).'
+        help='Tag compound verbs, compound particles, auxiliaries, mimetic words.'
         )
     parser.add_argument(
         '--form', choices=['surface', 'base', 'lemma'], default='surface',
@@ -704,12 +705,12 @@ def main() -> None:
                         continue
                     token_buffer += f' {token}'
                     if extended_pos:
-                        if (
-                            pos == VV_POS and
-                            lemma_reading in VV_READING_SET
-                            ):
-                            # will yield only the compound verb (single token):
-                            pos = X_VERB_POS
+                        # will yield only the compound verb (single token):
+                        if pos == VV_POS:
+                            if lemma_reading in VV_READING_SET:
+                                pos = X_VERB_POS
+                        elif pos == MIMETIC_POS and token in MIMETIC_SET:
+                            pos = X_MIMETIC_POS
                     yield (fields[ret_index], pos)
 
             def pos_tag(s: str) -> list[tuple[str, str]]:
