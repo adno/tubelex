@@ -15,8 +15,14 @@ import pandas as pd  # type: ignore
 from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
-from ja_utils import get_re_word, WAVE_DASH, add_tagger_arg_group, tagger_from_args, \
-    NORMALIZE_FULLWIDTH_TILDE, OPT_BASE_LEMMA_POS
+from ja_utils import (
+    get_re_word, WAVE_DASH, add_tagger_arg_group, tagger_from_args,
+    NORMALIZE_FULLWIDTH_TILDE, OPT_BASE_LEMMA_READING_POS
+    )
+from extended_pos import (
+    X_PARTICLE_POS, X_VERB_POS, X_AUX_POS,
+    VV_POS, VV_READING_SET, PAT_PARTICLE_AUX, AUX_GROUP, aux2base
+    )
 
 from freq_utils import Storage, WordCounterGroup
 # We use the smaller model from
@@ -75,8 +81,12 @@ def parse() -> argparse.Namespace:
         help='Compute frequencies'
         )
     parser.add_argument(
-        '--pos', action='store_true',
+        '--pos', '-P', action='store_true',
         help='Add most common POS to frequencies'
+        )
+    parser.add_argument(
+        '--extended-pos', '-X', action='store_true',
+        help='Tag compound verbs (XV), compound particles (XP), auxiliaries (XA).'
         )
     parser.add_argument(
         '--form', choices=['surface', 'base', 'lemma'], default='surface',
@@ -635,6 +645,7 @@ def main() -> None:
     unique = args.unique
     frequencies = args.frequencies
     with_pos = args.pos
+    extended_pos = args.extended_pos
     form = args.form
 
     if not (clean or unique or frequencies):
@@ -646,9 +657,10 @@ def main() -> None:
         do_clean(storage, limit=limit)
 
     if unique or frequencies:
+        assert not extended_pos or with_pos, '--extended-pos requires --pos'
         if frequencies and with_pos or form != 'surface':
             ret_index = ['surface', 'base', 'lemma'].index(form)
-            tagger_parse = tagger_from_args(args, OPT_BASE_LEMMA_POS).parse
+            tagger_parse = tagger_from_args(args, OPT_BASE_LEMMA_READING_POS).parse
 
 #             def iter_pos_tag_sahen(s: str) -> Iterator[tuple[str, str]]:
 #                 prev_pos = None
@@ -668,13 +680,37 @@ def main() -> None:
 
             def iter_pos_tag(s: str) -> Iterator[tuple[str, str]]:
                 lines = tagger_parse(s).split('\n')
+                token_buffer = ''
+                nonword_token = False
                 for line in lines:
                     if line == 'EOS':
+                        nonword_token = True
+                    else:
+                        fields = line.split('\t')
+                        token, base, lemma, lemma_reading, pos = fields
+                        if not RE_WORD.match(token):
+                            nonword_token = True
+                    if nonword_token:
+                        if extended_pos:
+                            # will yield both compound in addition to single tokens:
+                            for m in PAT_PARTICLE_AUX.finditer(token_buffer):
+                                if aux_tokens := m.group(AUX_GROUP):
+                                    yield (aux2base(aux_tokens), X_AUX_POS)
+                                else:
+                                    p = m.group(1).replace(' ', '')
+                                    yield (m.group(1).replace(' ', ''), X_PARTICLE_POS)
+                            token_buffer = ''
+                        nonword_token = False
                         continue
-                    fields = line.split('\t')
-                    token, _, _, pos = fields
-                    if RE_WORD.match(token):
-                        yield (fields[ret_index], pos)
+                    token_buffer += f' {token}'
+                    if extended_pos:
+                        if (
+                            pos == VV_POS and
+                            lemma_reading in VV_READING_SET
+                            ):
+                            # will yield only the compound verb (single token):
+                            pos = X_VERB_POS
+                    yield (fields[ret_index], pos)
 
             def pos_tag(s: str) -> list[tuple[str, str]]:
                 return list(iter_pos_tag(s))
@@ -683,6 +719,7 @@ def main() -> None:
                 return list(map(lambda token_pos: token_pos[0], iter_pos_tag(s)))
         else:
             wakati_parse = tagger_from_args(args).parse
+
             def tokenize(s: str) -> list[str]:
                 return list(filter(RE_WORD.match, wakati_parse(s).split(' ')))
 

@@ -100,10 +100,11 @@ NORMALIZE_FULLWIDTH_TILDE: dict[int, int] = {
 
 OPT_WAKATI = '-O wakati'
 OPT_UNIDIC = '-O unidic'
-OPT_BASE_LEMMA_POS = (
+OPT_BASE_LEMMA_READING_POS = (
     r'-O "" '
-    r'-F "%m\\t%f[10]\\t%f[7]\\t%F-[0,1,2,3]\\n" '  # surface, "orthBase", "lemma", POS
-    r'-U "%m\\t%m\\t%m\\t%F-[0,1,2,3]\n"' # "orthBase", "lemma" N/A for UNK
+    r'-F "%m\\t%f[10]\\t%f[7]\\t%f[6]\\t%F-[0,1,2,3]\\n" '
+    # surface, "orthBase", "lemma", "lForm" (語彙素読み), POS
+    r'-U "%m\\t%m\\t%m\\t%m\\t%F-[0,1,2,3]\n"' # for UNK
     )
 
 
