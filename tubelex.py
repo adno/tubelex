@@ -17,12 +17,7 @@ from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
 from ja_utils import (
     get_re_word, WAVE_DASH, add_tagger_arg_group, tagger_from_args,
-    NORMALIZE_FULLWIDTH_TILDE, OPT_BASE_LEMMA_READING_POS
-    )
-from extended_pos import (
-    X_PARTICLE_POS, X_VERB_POS, X_AUX_POS, X_MIMETIC_POS,
-    VV_POS, VV_READING_SET, PAT_PARTICLE_AUX, AUX_GROUP, aux2base,
-    MIMETIC_POS, MIMETIC_SET
+    NORMALIZE_FULLWIDTH_TILDE, OPT_BASE_LEMMA_READING_POS, POSTagger
     )
 
 from freq_utils import Storage, WordCounterGroup
@@ -49,7 +44,7 @@ DEFAULT_MIN_VIDEOS = 3                      # See CLI arguments
 DEFAULT_MIN_CHANNELS = 0                    # See CLI arguments
 LINEAR_KERNEL_CHUNK_SIZE = 10000
 Tokenizer = Callable[[str], list[str]]
-POSTagger = Callable[[str], list[tuple[str, str]]]
+TokenizerTagger = Callable[[str], list[tuple[str, str]]]
 
 
 def linear_kernel_piecewise(x, max_size=LINEAR_KERNEL_CHUNK_SIZE, wrapper=None):
@@ -544,7 +539,7 @@ def do_frequencies(
     storage: Storage,
     limit: Optional[int],
     tokenize: Optional[Tokenizer],
-    pos_tag: Optional[POSTagger],
+    pos_tag: Optional[TokenizerTagger],
     path: Optional[str],
     channel_stats_path: Optional[str],
     min_videos: int,
@@ -626,18 +621,6 @@ def do_frequencies(
     counters.warnings_for_markup()
 
 
-SAHEN_NOUN_POS = '名詞-普通名詞-サ変可能'
-SAHEN_VERB_POS = '動詞-非自立可能'
-SAHEN_VERB_LEMMAS = {
-    '為る',
-    '出来る'
-    '致す',
-    '為さる',
-    '頂く',
-    '下さる'
-    }
-
-
 def main() -> None:
     args = parse()
     storage = Storage.from_args(args)
@@ -660,64 +643,17 @@ def main() -> None:
     if unique or frequencies:
         assert not extended_pos or with_pos, '--extended-pos requires --pos'
         if frequencies and with_pos or form != 'surface':
-            ret_index = ['surface', 'base', 'lemma'].index(form)
-            tagger_parse = tagger_from_args(args, OPT_BASE_LEMMA_READING_POS).parse
-
-#             def iter_pos_tag_sahen(s: str) -> Iterator[tuple[str, str]]:
-#                 prev_pos = None
-#                 lines = tagger_parse(s).split('\n')
-#                 for line in lines:
-#                     if line == 'EOS':
-#                         prev_pos = None
-#                         continue
-#                     fields = line.split('\t', maxsplit=MECAB_MAX)
-#                     token, _, _, lemma, pos, _ = fields
-#                     if RE_WORD.match(token):
-#                         yield (fields[ret_index],
-#                                pos, ((prev_pos == SAHEN_NOUN_POS) and
-#                                      (pos == SAHEN_VERB_POS) and
-#                                      (lemma in SAHEN_VERB_LEMMAS)))
-#                     prev_pos = pos
-
-            def iter_pos_tag(s: str) -> Iterator[tuple[str, str]]:
-                lines = tagger_parse(s).split('\n')
-                token_buffer = ''
-                nonword_token = False
-                for line in lines:
-                    if line == 'EOS':
-                        nonword_token = True
-                    else:
-                        fields = line.split('\t')
-                        token, base, lemma, lemma_reading, pos = fields
-                        if not RE_WORD.match(token):
-                            nonword_token = True
-                    if nonword_token:
-                        if extended_pos:
-                            # will yield both compound in addition to single tokens:
-                            for m in PAT_PARTICLE_AUX.finditer(token_buffer):
-                                if aux_tokens := m.group(AUX_GROUP):
-                                    yield (aux2base(aux_tokens), X_AUX_POS)
-                                else:
-                                    p = m.group(1).replace(' ', '')
-                                    yield (m.group(1).replace(' ', ''), X_PARTICLE_POS)
-                            token_buffer = ''
-                        nonword_token = False
-                        continue
-                    token_buffer += f' {token}'
-                    if extended_pos:
-                        # will yield only the compound verb (single token):
-                        if pos == VV_POS:
-                            if lemma_reading in VV_READING_SET:
-                                pos = X_VERB_POS
-                        elif pos == MIMETIC_POS and token in MIMETIC_SET:
-                            pos = X_MIMETIC_POS
-                    yield (fields[ret_index], pos)
+            pos_tagger = POSTagger(
+                tagger_from_args(args, OPT_BASE_LEMMA_READING_POS),
+                extended=extended_pos,
+                token_form=form
+                )
 
             def pos_tag(s: str) -> list[tuple[str, str]]:
-                return list(iter_pos_tag(s))
+                return list(pos_tagger(s))
 
             def tokenize(s: str) -> list[str]:
-                return list(map(lambda token_pos: token_pos[0], iter_pos_tag(s)))
+                return list(map(lambda token_pos: token_pos[0], pos_tagger(s)))
         else:
             wakati_parse = tagger_from_args(args).parse
 

@@ -5,8 +5,14 @@ Japanese language processing for `tubelex` and `wikipedia-word-frequency-clean`.
 import fugashi  # type: ignore
 import os
 from typing import Optional
+from collections.abc import Callable, Iterator
 import argparse
 import re
+from extended_pos import (
+    X_PARTICLE_POS, X_VERB_POS, X_AUX_POS, X_MIMETIC_POS,
+    VV_POS, VV_READING_SET, PAT_PARTICLE_AUX, AUX_GROUP, aux2base,
+    MIMETIC_POS, MIMETIC_SET
+    )
 
 
 # Word matching (not just) for Japanese
@@ -97,14 +103,13 @@ NORMALIZE_FULLWIDTH_TILDE: dict[int, int] = {
     0xFF5E: 0x301C  # fullwidth tilde '～' (common typo) => wave dash '〜'
     }
 
-
 OPT_WAKATI = '-O wakati'
 OPT_UNIDIC = '-O unidic'
 OPT_BASE_LEMMA_READING_POS = (
     r'-O "" '
     r'-F "%m\\t%f[10]\\t%f[7]\\t%f[6]\\t%F-[0,1,2,3]\\n" '
     # surface, "orthBase", "lemma", "lForm" (語彙素読み), POS
-    r'-U "%m\\t%m\\t%m\\t%m\\t%F-[0,1,2,3]\n"' # for UNK
+    r'-U "%m\\t%m\\t%m\\t%m\\tUNK\n"'  # for UNK
     )
 
 
@@ -155,3 +160,110 @@ def tagger_from_args(
             import unidic_lite  # type: ignore
             dicdir = unidic_lite.DICDIR
     return fugashi_tagger(dicdir, option)
+
+
+RE_WORD = get_re_word(allow_start_end=WAVE_DASH)
+
+_SAHEN_NOUN_POS  = '名詞-普通名詞-サ変可能'
+_SAHEN_VERB_POS  = '動詞-非自立可能'
+_SAHEN_MARKER    = 'サ'
+_SAHEN_VERB_LEMMAS = {
+    '為る',
+    '出来る'
+    '致す',
+    '為さる',
+    '頂く',
+    '下さる'
+    }
+SAHEN_VERB_NOUN_POS = '動詞-サ変'   # used if sahen_verbs=True (not used by MeCab)
+
+
+class POSTagger:
+    __slots__ = ('tagger_parse', 'extended', 'sahen_verbs', 'ret_index')
+    tagger_parse: Callable[[str], str]
+    extended: bool
+    sahen_verbs: bool
+    ret_index: int
+
+    def __init__(
+        self,
+        tagger: Callable[[str], str],  # OPT_BASE_LEMMA_READING_POS tagger
+        extended: bool = False,
+        sahen_verbs: bool = False,
+        token_form: str = 'surface'  # One of ['surface', 'base', 'lemma']
+        ):
+        assert not sahen_verbs or extended, 'POSTagger: sahen_verbs requires extended'
+        self.tagger_parse   = tagger.parse
+        self.extended       = extended
+        self.sahen_verbs    = sahen_verbs
+        self.ret_index      = ['surface', 'base', 'lemma'].index(token_form)
+
+    def _pos_tag(self, s: str) -> Iterator[tuple[str, str]]:
+        tagger_parse = self.tagger_parse
+        extended = self.extended
+        sahen_verbs = self.sahen_verbs
+        ret_index = self.ret_index
+
+        lines = tagger_parse(s).split('\n')
+        token_buffer = ''
+        nonword_token = False
+        prev_pos = None
+        for line in lines:
+            if line == 'EOS':
+                nonword_token = True
+            else:
+                fields = line.split('\t')
+                token, base, lemma, lemma_reading, pos = fields
+                if not RE_WORD.match(token):
+                    nonword_token = True
+            if nonword_token:
+                if extended:
+                    # will yield both compound in addition to single tokens:
+                    for m in PAT_PARTICLE_AUX.finditer(token_buffer):
+                        if aux_tokens := m.group(AUX_GROUP):
+                            yield (aux2base(aux_tokens), X_AUX_POS)
+                        else:
+                            yield (m.group(1).replace(' ', ''), X_PARTICLE_POS)
+                    token_buffer = ''
+                nonword_token = False
+                prev_pos = None
+                continue
+            token_buffer += f' {token}'
+            if extended:
+                # will yield only the compound verb (single token):
+                if pos == VV_POS:
+                    if lemma_reading in VV_READING_SET:
+                        pos = X_VERB_POS
+                elif pos == MIMETIC_POS and token in MIMETIC_SET:
+                    pos = X_MIMETIC_POS
+                elif (
+                    sahen_verbs and
+                    (pos == _SAHEN_VERB_POS) and
+                    (prev_pos == _SAHEN_NOUN_POS) and
+                    (lemma in _SAHEN_VERB_LEMMAS)
+                    ):
+                    pos = _SAHEN_MARKER
+            yield (fields[ret_index], pos)
+            prev_pos = pos
+
+    def __call__(self, s: str) -> Iterator[tuple[str, str]]:
+        iter_pos_tag = self._pos_tag(s)
+        if self.sahen_verbs:
+            # if pos is _SAHEN_MARKER:
+            #   yield SAHEN_VERB_NOUN_POS instead of previous pos
+            #   yield _SAHEN_VERB_POS (the original 動詞-非自立可能) for this pos
+            for ret0, pos0 in iter_pos_tag:
+                break
+            else:
+                return
+            for ret, pos in iter_pos_tag:
+                if pos is _SAHEN_MARKER:
+                    pos     = _SAHEN_VERB_POS
+                    pos0    = SAHEN_VERB_NOUN_POS
+                yield (ret0, pos0)
+                ret0 = ret
+                pos0 = pos
+            yield (ret0, pos0)
+            return
+        else:
+            yield from iter_pos_tag
