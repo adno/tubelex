@@ -179,30 +179,34 @@ SAHEN_VERB_NOUN_POS = '動詞-サ変'   # used if sahen_verbs=True (not used by 
 
 
 class POSTagger:
-    __slots__ = ('tagger_parse', 'extended', 'sahen_verbs', 'ret_index')
+    __slots__ = ('tagger_parse', 'extended', 'sahen_verbs', 'ret_index', 'word_only')
     tagger_parse: Callable[[str], str]
     extended: bool
     sahen_verbs: bool
     ret_index: int
+    word_only: bool
 
     def __init__(
         self,
         tagger: Callable[[str], str],  # OPT_BASE_LEMMA_READING_POS tagger
         extended: bool = False,
         sahen_verbs: bool = False,
-        token_form: str = 'surface'  # One of ['surface', 'base', 'lemma']
+        token_form: str = 'surface',  # One of ['surface', 'base', 'lemma']
+        word_only: bool = True
         ):
         assert not sahen_verbs or extended, 'POSTagger: sahen_verbs requires extended'
         self.tagger_parse   = tagger.parse
         self.extended       = extended
         self.sahen_verbs    = sahen_verbs
         self.ret_index      = ['surface', 'base', 'lemma'].index(token_form)
+        self.word_only      = word_only
 
     def _pos_tag(self, s: str) -> Iterator[tuple[str, str]]:
         tagger_parse = self.tagger_parse
         extended = self.extended
         sahen_verbs = self.sahen_verbs
         ret_index = self.ret_index
+        word_only = self.word_only
 
         lines = tagger_parse(s).split('\n')
         token_buffer = ''
@@ -214,14 +218,18 @@ class POSTagger:
             else:
                 fields = line.split('\t')
                 token, base, lemma, lemma_reading, pos = fields
-                if not RE_WORD.match(token):
+                if word_only and not RE_WORD.match(token):
                     nonword_token = True
             if nonword_token:
                 if extended:
                     # will yield both compound in addition to single tokens:
                     for m in PAT_PARTICLE_AUX.finditer(token_buffer):
                         if aux_tokens := m.group(AUX_GROUP):
-                            yield (aux2base(aux_tokens), X_AUX_POS)
+                            yield (
+                                aux2base(aux_tokens) if self.ret_index!=0 else
+                                aux_tokens.replace(' ', ''),    # surface
+                                X_AUX_POS
+                                )
                         else:
                             yield (m.group(1).replace(' ', ''), X_PARTICLE_POS)
                     token_buffer = ''
