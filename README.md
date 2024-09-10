@@ -1,6 +1,8 @@
 # About TUBELEX-JA
 
-Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Japanese subtitles for YouTube videos (93M tokens from 72k subtitle files).
+Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Japanese subtitles for YouTube videos (163M tokens from 100k subtitle files).
+
+**Note about the current version (v.03):** We updated the frequency files with a larger corpus of YouTube videos. The outline on this page is still valid, except that the corpus is no longer based on the video lists from JTubeSpeech. We have not updated the source code in the repository yet. Stay tuned for more information and frequency files for other languages!
 
 The project consists mainly of:
 
@@ -38,7 +40,9 @@ The lowercasing concerns not only the letters A-Z but also accented characters a
 
 ## About corpus and processing
 
-As a basis for the corpus, we used manual subtitles listed in the file `data/ja/202103.csv` from the [JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) repository that were still available as of 30 November 2022. (The script for downloading is also part of that repository.) The download subtitles were then processed using the [tubelex.py](tubelex.py) script according to the following steps:
+**Note:** This section is slightly out of date as of v0.3. See above.
+
+~~As a basis for the corpus, we used manual subtitles listed in the file `data/ja/202103.csv` from the [JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) repository that were still available as of 30 November 2022.~~ (The script for downloading is also part of that repository.) The download subtitles were then processed using the [tubelex.py](tubelex.py) script according to the following steps:
 
 1. Extract lines of subtitles and convert HTML (e.g. `&amp;`) entities to characters.
 
@@ -100,9 +104,11 @@ Note that the output of the script is already included in the repository. You ca
 
 # Results
 
-After cleaning and duplicate removal, there are **93,215,459 tokens**. The word list consists of **127,421 words** occurring in at least 3 videos (Unidic Lite segmentation, no normalization, no lowercasing). The number of words differs slightly for other mutations.
+~~After cleaning and duplicate removal, there are **93,215,459 tokens**. The word list consists of **127,421 words** occurring in at least 3 videos (Unidic Lite segmentation, no normalization, no lowercasing). The number of words differs slightly for other mutations.~~
 
 ## Cleaning statistics (steps 2-4 above):
+
+**Note:** This section is slightly out of date as of v0.3. See above and [results/tubelex-ja.out](results/tubelex-ja.out).
 
 * files (determined after sequence removal and line filtering):
   - 103887 total
