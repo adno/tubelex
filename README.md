@@ -1,8 +1,14 @@
-# About TUBELEX-JA
+# ⚠️ Outdated repository: Please use the [current TUBELEX repository](https://github.com/naist-nlp/tubelex)
 
-Inspired by the SUBTLEX word lists, TUBELEX-JA is a large word list based on Japanese subtitles for YouTube videos (163M tokens from 100k subtitle files).
+This repository provides outdated versions ([v0.1](https://github.com/adno/tubelex/tree/v0.1), [v0.2](https://github.com/adno/tubelex/tree/v0.2), [v0.3](https://github.com/adno/tubelex/tree/v0.3)) of the Japanese TUBELEX word lists (TUBELEX-JA). Current versions for multiple languages, fastText word embeddings, and KenLM n-gram models are available in the [new TUBELEX repository](https://github.com/naist-nlp/tubelex).
 
-**Note about the current version (v.03):** We updated the frequency files with a larger corpus of YouTube videos. The outline on this page is still valid, except that the corpus is no longer based on the video lists from JTubeSpeech. We have not updated the source code in the repository yet. Stay tuned for more information and frequency files for other languages!
+Please do not use the outdated data from this repository, except for replication of previous results or for comparison with the current version.
+
+## About TUBELEX-JA (outdated)
+
+TUBELEX-JA is a large word list based on Japanese subtitles for YouTube videos (163M tokens from 100k subtitle files).
+
+**Note about this version (v.03):** We updated the frequency files with a larger corpus of YouTube videos. The outline on this page is still valid, except that the corpus is no longer based on the video lists from JTubeSpeech. We have not updated the source code in the repository yet. Stay tuned for more information and frequency files for other languages!
 
 The project consists mainly of:
 
